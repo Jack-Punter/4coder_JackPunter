@@ -24,18 +24,35 @@ CUSTOM_DOC("Switch to an open buffer in the other panel")
 }
 
 CUSTOM_UI_COMMAND_SIG(jp_log_custom_keywords)
-CUSTOM_DOC("Log_Custom_keywords")
+CUSTOM_DOC("Log Custom_keywords")
 {
-    char count_buffer[16] = {};
-    snprintf(count_buffer, 16, "%llu / %llu", custom_keywords_end, total_custom_keywords);
-    log_string(app, string_u8_litexpr("Array Count: "));
-    log_string(app, SCu8(count_buffer));
-    log_string(app, string_u8_litexpr("\n"));
-    
-    for (size_t i = 0; i < custom_keywords_end; ++i){
-        log_string(app, custom_keywords[i]);
-        log_string(app, string_u8_litexpr("\n"));
-    }
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
+                                                         jp_buffer_data_t);
+
+        for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
+            log_string(app, buffer_data->custom_keywords[i]);
+        }
+
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
+}
+
+CUSTOM_UI_COMMAND_SIG(jp_log_custom_types)
+CUSTOM_DOC("Log Custom_keywords")
+{
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
+                                                         jp_buffer_data_t);
+
+        for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
+            log_string(app, buffer_data->custom_types[i]);
+        }
+
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
 }
 
 #endif // FCODER_JACK_PUNTER_COMMANDS

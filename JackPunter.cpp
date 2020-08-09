@@ -13,9 +13,19 @@
 #define DEBUG_MSG_STR(str)
 #endif
 
+global const u64 custom_keywords_per_buffer = 256;
+global const u64 custom_types_per_buffer = 512;
+
 struct jp_buffer_data_t {
-    
+    Arena custom_keyword_type_arena;
+
+    String_Const_u8 custom_keywords[custom_keywords_per_buffer] = {};
+    u64             custom_keywords_end = 0;
+
+    String_Const_u8 custom_types[custom_types_per_buffer] = {};
+    u64             custom_types_end = 0;
 };
+CUSTOM_ID(attachment, jp_buffer_attachment);
 
 global i32 type_token_kinds[] = {
     TokenCppKind_Void,
@@ -39,28 +49,72 @@ jp_is_type_token(Token* token){
     return false;
 }
 
-// TODO(jack) Make custom_keywords array dynamic on an arena
-// So there is no limit to the number of custom keywords
-// global Arena keyword_array_arena;
-global Arena keyword_storage_arena;
-
-global const u64 total_custom_keywords = 256;
-global String_Const_u8 custom_keywords[total_custom_keywords] = {};
-global u64 custom_keywords_end = 0;
 function b32
-jp_is_custom_keyword(String_Const_u8 keyword) {
-    for (size_t i = 0; i < custom_keywords_end; ++i){
-        if (string_match(keyword, custom_keywords[i])){
+jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
+    // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
+    Managed_Scope global_scope = get_global_managed_scope(app);
+    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
+    for (size_t i = 0; i < global_scope_data->custom_keywords_end; ++i){
+        if (string_match(keyword, global_scope_data->custom_keywords[i])){
             return true;
         }
     }
+
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                        jp_buffer_data_t);
+        if (buffer_data) {
+            for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
+                if (string_match(keyword, buffer_data->custom_keywords[i])){
+                    return true;
+                }
+            }
+        }
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
     return false;
 }
 function b32
-jp_push_custom_keyword(String_Const_u8 new_keyword) {
-    if(!jp_is_custom_keyword(new_keyword)){
-        if (custom_keywords_end < total_custom_keywords) {
-            custom_keywords[custom_keywords_end++] = push_string_copy(&keyword_storage_arena, new_keyword);
+jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
+    // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
+    Managed_Scope global_scope = get_global_managed_scope(app);
+    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
+    for (size_t i = 0; i < global_scope_data->custom_types_end; ++i){
+        if (string_match(type, global_scope_data->custom_types[i])){
+            return true;
+        }
+    }
+
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                            jp_buffer_data_t);
+        if (buffer_data) {
+            for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
+                if (string_match(type, buffer_data->custom_types[i])){
+                    return true;
+                }
+            }
+        }
+        // NOTE(jack): returns zero when its the last buffer
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
+    return false;
+}
+
+function b32
+jp_push_custom_keyword(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_keyword) {
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                     jp_buffer_data_t);
+
+    if(!jp_is_custom_keyword(app, new_keyword)) {
+        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
+            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
             return true;
         }
         return false;
@@ -68,23 +122,42 @@ jp_push_custom_keyword(String_Const_u8 new_keyword) {
     return true;
 }
 
-global const u64 total_custom_types = 512;
-global String_Const_u8 custom_types[total_custom_types] = {};
-global u64 custom_types_end = 0;
 function b32
-jp_is_custom_type(String_Const_u8 type) {
-    for (size_t i = 0; i < total_custom_types; ++i){
-        if (string_match(type, custom_types[i])){
+jp_push_custom_keyword(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_keyword) {
+    if(!jp_is_custom_keyword(app, new_keyword)) {
+        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
+            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
             return true;
         }
+        return false;
     }
-    return false;
+    return true;
 }
+
 function b32
-jp_push_custom_type(String_Const_u8 new_type) {
-    if (!jp_is_custom_type(new_type)) {
-        if (custom_types_end < total_custom_types) {
-            custom_types[custom_types_end++] = push_string_copy(&keyword_storage_arena, new_type);
+jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_type) {
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                     jp_buffer_data_t);
+
+    if (!jp_is_custom_type(app, new_type)) {
+        if (buffer_data->custom_types_end < custom_types_per_buffer) {
+            buffer_data->custom_types[buffer_data->custom_types_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
+            return true;
+        }
+        return false;
+    }
+    return true;
+}
+
+function b32
+jp_push_custom_type(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_type) {
+    if (!jp_is_custom_type(app, new_type)) {
+        if (buffer_data->custom_types_end < custom_types_per_buffer) {
+            buffer_data->custom_types[buffer_data->custom_types_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
             return true;
         }
         return false;
@@ -94,7 +167,7 @@ jp_push_custom_type(String_Const_u8 new_type) {
 
 global bool GlobalIsRecordingMacro = false;
 
-CUSTOM_ID(attachment, jp_buffer_attachment);
+
 
 #include "JackPunterParsing.cpp"
 // NOTE(jack): Custom Command Definitions
@@ -127,17 +200,18 @@ custom_layer_init(Application_Links *app)
     // 4.1.6 chaned the default setting to ""
     JackPunterBindings(&framework_mapping);
 
-    keyword_storage_arena = make_arena_system();
-    // keyword_array_arena = make_arena_system();
+    Managed_Scope global_scope = get_global_managed_scope(app);
+    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
+    global_scope_data->custom_keyword_type_arena = make_arena_system();
 
-    jp_push_custom_type(string_u8_litexpr("uint8_t"));
-    jp_push_custom_type(string_u8_litexpr("uint16_t"));
-    jp_push_custom_type(string_u8_litexpr("uint32_t"));
-    jp_push_custom_type(string_u8_litexpr("uint64_t"));
-    jp_push_custom_type(string_u8_litexpr("int8_t"));
-    jp_push_custom_type(string_u8_litexpr("int16_t"));
-    jp_push_custom_type(string_u8_litexpr("int32_t"));
-    jp_push_custom_type(string_u8_litexpr("int64_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint8_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint16_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint32_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint64_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int8_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int16_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int32_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int64_t"));
 }
 
 #endif // FCODER_JACK_PUNTER

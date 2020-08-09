@@ -4,6 +4,13 @@
 function void
 jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
 {
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                     jp_buffer_data_t);
+
+    buffer_data->custom_keywords_end = 0;
+    buffer_data->custom_types_end = 0;
+
     Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
     if (token_array.tokens != 0)
     {
@@ -43,9 +50,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                     // NOTE(jack): If the defined to (dt) token is a keyword and the defined identifier
                     // is not already a custom keyword
                     if((dt_token->kind == TokenBaseKind_Keyword && jp_is_type_token(dt_token)) ||
-                       jp_is_custom_type(dt_string))
+                       jp_is_custom_type(app, dt_string))
                     {
-                        if (jp_push_custom_type(di_string)) {
+                        if (jp_push_custom_type(app, buffer_id, di_string)) {
                             DEBUG_MSG_LIT("New #define type Added: ");
                             DEBUG_MSG_STR(di_string);
                             DEBUG_MSG_LIT("\n");
@@ -56,9 +63,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                         }
                     }
                     else if ((dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token)) ||
-                             jp_is_custom_keyword(dt_string))
+                             jp_is_custom_keyword(app, dt_string))
                     {
-                        if (jp_push_custom_keyword(di_string)) {
+                        if (jp_push_custom_keyword(app, buffer_id, di_string)) {
                             DEBUG_MSG_LIT("New #define keyword Added: ");
                             DEBUG_MSG_STR(di_string);
                             DEBUG_MSG_LIT("\n");
@@ -87,44 +94,71 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                         DEBUG_MSG_LIT("typedef was the last token\n");
                         break;
                     }
-                    //Token *dt_token = token_it_read(&it);
-                    //String_Const_u8 dt_string = push_buffer_range(app, scratch, buffer_id,
-                    //                                            {dt_token->pos, dt_token->pos + dt_token->size});
-                    // Is this a valid Typedef
-                    //if(dt_token->kind == TokenBaseKind_Keyword || 
-                    //  (dt_token->kind == TokenBaseKind_Identifier && jp_is_custom_type(dt_string)))
-                    //{   
-                        Token *di_token;
+                    Token *second_token = token_it_read(&it);
+                    
+                    // typedef struct { int x, int y } myStruct;
+                    if (second_token->sub_kind == TokenCppKind_Struct) {
+                        if (!token_it_inc_non_whitespace(&it)) {
+                            DEBUG_MSG_LIT("typedef's existing type was the last token\n");
+                            break;
+                        }
+                        second_token = token_it_read(&it);
+
+                        // NOTE(jack): If the token after 'struct' is an identifier it is a new typename
+                        if (second_token->kind == TokenBaseKind_Identifier) {
+                            String_Const_u8 inner_struct_type = push_buffer_range(app, scratch, buffer_id,
+                                                                                  {second_token->pos, second_token->pos + second_token->size});
+                            if (jp_push_custom_type(app, buffer_id, inner_struct_type)) {
+                                DEBUG_MSG_LIT("New typedef struct type added: ");
+                                DEBUG_MSG_STR(inner_struct_type);
+                                DEBUG_MSG_LIT("\n");
+                            } else { 
+                                DEBUG_MSG_LIT("Array Full. Couldn't add new struct typedef type: ");
+                                DEBUG_MSG_STR(inner_struct_type);
+                                DEBUG_MSG_LIT("\n");
+                            }
+                        }
+
                         b32 failed = false;
-                        // skip parenthesis and operators. allows 'typedef int (*Sum)(int a, int b)'
-                        // TODO(jack): Do I want function pointer typedefs to be keyword highlighted?
-                        // TODO(jack): typdef struct {int x, int y} MyStruct;
+                        // NOTE(jack): Skip until the end of the struct declaration
                         do {
                             if (!token_it_inc_non_whitespace(&it)) {
                                 DEBUG_MSG_LIT("typedef's existing type was the last token\n");
                                 failed = true;
                             }
-                            di_token = token_it_read(&it);
-                        } while (!failed && di_token->kind != TokenBaseKind_Identifier);
-
-                        if (failed) {
-                            break;
+                            second_token = token_it_read(&it);
+                        } while(!failed && second_token->kind != TokenBaseKind_ScopeClose);
+                    }
+     
+                    Token *di_token;
+                    b32 failed = false;
+                    // NOTE(jack): skip parenthesis operators, and keywords.
+                    // Allows 'typedef int (*Sum)(int a, int b)' and
+                    // typedef unsigned long int LUINT
+                    do {
+                        if (!token_it_inc_non_whitespace(&it)) {
+                            DEBUG_MSG_LIT("typedef's existing type was the last token\n");
+                            failed = true;
                         }
+                        di_token = token_it_read(&it);
+                    } while (!failed && di_token->kind != TokenBaseKind_Identifier);
+                    
+                    String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id,
+                                                                  {di_token->pos, di_token->pos + di_token->size});
 
-                        String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id,
-                                                                    {di_token->pos, di_token->pos + di_token->size});
-                        if (di_token->kind == TokenBaseKind_Identifier) {
-                            if (jp_push_custom_type(di_string)) {
-                                DEBUG_MSG_LIT("New typedef type Added: ");
-                                DEBUG_MSG_STR(di_string);
-                                DEBUG_MSG_LIT("\n");
-                            } else { 
-                                DEBUG_MSG_LIT("Array Full. Couldn't add new typedef type: ");
-                                DEBUG_MSG_STR(di_string);
-                                DEBUG_MSG_LIT("\n");
-                            }
+                    // NOTE(jack): This will prevent adding an existing keyword, which shouldn't really happne
+                    if (di_token->kind == TokenBaseKind_Identifier) {
+                        if (jp_push_custom_type(app, buffer_id, di_string)) {
+                            DEBUG_MSG_LIT("New typedef type Added: ");
+                            DEBUG_MSG_STR(di_string);
+                            DEBUG_MSG_LIT("\n");
+                        } else { 
+                            DEBUG_MSG_LIT("Array Full. Couldn't add new typedef type: ");
+                            DEBUG_MSG_STR(di_string);
+                            DEBUG_MSG_LIT("\n");
                         }
-                    //}
+                    }
+
                 // NOTE(jack): struct MyStruct {int x, int y};
                 } else if (token->sub_kind == TokenCppKind_Struct) {
                     if (!token_it_inc_non_whitespace(&it)) {
@@ -135,7 +169,7 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                     if(next_token->kind == TokenBaseKind_Identifier) {
                         String_Const_u8 struct_name = push_buffer_range(app, scratch, buffer_id,
                                                                     {next_token->pos, next_token->pos + next_token->size});
-                        if (jp_push_custom_type(struct_name)) {
+                        if (jp_push_custom_type(app, buffer_id, struct_name)) {
                             DEBUG_MSG_LIT("New struct keyword Added: ");
                             DEBUG_MSG_STR(struct_name);
                             DEBUG_MSG_LIT("\n");

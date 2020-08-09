@@ -2,7 +2,7 @@
 #define FCODER_JACK_PUNTER_DRAW
 
 function ARGB_Color
-jp_get_token_color_cpp(Token token, String_Const_u8 lexeme)
+jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexeme)
 {
     ARGB_Color color = fcolor_resolve(fcolor_id(defcolor_text_default));
     switch (token.kind){
@@ -36,9 +36,9 @@ jp_get_token_color_cpp(Token token, String_Const_u8 lexeme)
         }break;
         case TokenBaseKind_Identifier:
         {
-            if (jp_is_custom_type(lexeme)) {
+            if (jp_is_custom_type(app, lexeme)) {
                 color = finalize_color(defcolor_keyword, 1);
-            } else if (jp_is_custom_keyword(lexeme)) {
+            } else if (jp_is_custom_keyword(app, lexeme)) {
                 color = finalize_color(defcolor_keyword, 0);
             }
         }break;
@@ -83,7 +83,7 @@ jp_draw_cpp_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, 
 
         String_Const_u8 lexeme = push_buffer_range(app, scratch, buffer,
                                                    {token->pos, token->pos + token->size});
-        ARGB_Color argb = jp_get_token_color_cpp(*token, lexeme);
+        ARGB_Color argb = jp_get_token_color_cpp(app, *token, lexeme);
 
         paint_text_color(app, text_layout_id, Ii64_size(token->pos, token->size), argb);
         if (!token_it_inc_all(&it)) {
