@@ -1,83 +1,28 @@
 #if !defined(FCODER_JACK_PUNTER_HOOKS)
 #define FCODER_JACK_PUNTER_HOOKS
 
+BUFFER_HOOK_SIG(jp_file_save)
+CUSTOM_DOC("Jack Punter save file")
+{
+    default_file_save(app, buffer_id);
+    jp_parse_keywods_types(app, buffer_id);
+    return 0;
+}
+
 BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
 {
     default_begin_buffer(app, buffer_id);
+    jp_parse_keywods_types(app, buffer_id);
     
-
-    Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
-    if (token_array.tokens != 0)
-    {
-        Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
-        for (;;) {
-            Scratch_Block scratch(app);
-            Token *token = token_it_read(&it);
-
-            String_Const_u8 token_string = push_buffer_range(app, scratch, buffer_id,
-                                                             {token->pos, token->pos + token->size});
-            if (token->kind = TokenBaseKind_Preprocessor &&
-                string_match(token_string, string_u8_litexpr("#define")))
-            {
-                if (!token_it_inc_non_whitespace(&it)) {
-                    log_string(app, string_u8_litexpr("#define was the last token"));
-                    break;
-                }
-                Token *di_token = token_it_read(&it);
-                
-                String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id,
-                                                              {di_token->pos, di_token->pos + di_token->size});
-
-                if (!token_it_inc_non_whitespace(&it)) {
-                    log_string(app, string_u8_litexpr("#defined identifier was the last token"));
-                    break;
-                }
-                Token *dt_token = token_it_read(&it);
-                String_Const_u8 dt_string = push_buffer_range(app, scratch, buffer_id,
-                                                              {dt_token->pos, dt_token->pos + dt_token->size});
-                
-                log_string(app, string_u8_litexpr("========== "));
-                log_string(app, token_string);
-                log_string(app, string_u8_litexpr(" "));
-                log_string(app, di_string);
-                log_string(app, string_u8_litexpr(" "));
-                log_string(app, dt_string);
-                log_string(app, string_u8_litexpr(" ==========\n"));
-                
-                if(dt_token->kind == TokenBaseKind_Keyword || jp_is_custom_keyword(dt_string)) {
-                    if (jp_push_custom_keyword(di_string)) {
-                        log_string(app, string_u8_litexpr("New Keyword Added: "));
-                        log_string(app, di_string);
-                        log_string(app, string_u8_litexpr("\n"));
-                    } else {
-                        log_string(app, string_u8_litexpr("Array Full. Couldn't add new Keyword: "));
-                        log_string(app, di_string);
-                        log_string(app, string_u8_litexpr("\n"));
-                    }
-                }
-
-                // NOTE(jack): Decrement just to prevent possibly mising a define
-                // occurs when it is only a define i.e. #define header_guard
-                if (!token_it_dec_non_whitespace(&it)) {
-                    log_string(app, string_u8_litexpr("Decrement failed"));
-                    break;
-                }
-            }
-
-            // We dont want to check whitespace
-            if(!token_it_inc_non_whitespace(&it)) {
-                break;
-            }
-        }
-    }
     return 0;
 }
 
 function void
 jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
                       Buffer_ID buffer, Text_Layout_ID text_layout_id,
-                      Rect_f32 rect){
+                      Rect_f32 rect) 
+{
     ProfileScope(app, "render buffer");
     
     View_ID active_view = get_active_view(app, Access_Always);
@@ -93,7 +38,7 @@ jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
     
     // NOTE(allen): Token colorizing
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
-    if (token_array.tokens != 0){
+    if (token_array.tokens != 0) {
         jp_draw_cpp_token_colors(app, text_layout_id, &token_array, buffer);
         
         // NOTE(allen): Scan for TODOs and NOTEs
@@ -109,8 +54,7 @@ jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
             draw_comment_highlights(app, buffer, text_layout_id,
                                     &token_array, pairs, ArrayCount(pairs));
         }
-    }
-    else{
+    } else {
         paint_text_color_fcolor(app, text_layout_id, visible_range, fcolor_id(defcolor_text_default));
     }
     

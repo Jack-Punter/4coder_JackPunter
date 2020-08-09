@@ -17,7 +17,7 @@ JackPunterGlobalBinding(Mapping *mapping, i64 global_id)
     // NOTE(jack): KeyCode_Tick is incorrectly apostrophe (' @) on my PC
     // This may need to be configured on other machines.
     Bind(keyboard_macro_replay,         KeyCode_Tick, KeyCode_Control);
-    
+
     Bind(change_active_panel,           KeyCode_Comma, KeyCode_Control);
     Bind(change_active_panel_backwards, KeyCode_Comma, KeyCode_Control, KeyCode_Shift);
     Bind(interactive_new,               KeyCode_N, KeyCode_Control);

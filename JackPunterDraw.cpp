@@ -12,7 +12,11 @@ jp_get_token_color_cpp(Token token, String_Const_u8 lexeme)
         }break;
         case TokenBaseKind_Keyword:
         {
-            color = fcolor_resolve(fcolor_id(defcolor_keyword));
+            if (jp_is_type_token(&token)){
+                color = finalize_color(defcolor_keyword, 1);
+            } else {
+                color = finalize_color(defcolor_keyword, 0);
+            }
         }break;
         case TokenBaseKind_Comment:
         {
@@ -32,8 +36,10 @@ jp_get_token_color_cpp(Token token, String_Const_u8 lexeme)
         }break;
         case TokenBaseKind_Identifier:
         {
-            if(jp_is_custom_keyword(lexeme)) {
-                color = fcolor_resolve(fcolor_id(defcolor_keyword));
+            if (jp_is_custom_type(lexeme)) {
+                color = finalize_color(defcolor_keyword, 1);
+            } else if (jp_is_custom_keyword(lexeme)) {
+                color = finalize_color(defcolor_keyword, 0);
             }
         }break;
     }
