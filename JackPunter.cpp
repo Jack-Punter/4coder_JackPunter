@@ -3,7 +3,7 @@
 
 #include "../4coder_default_include.cpp"
 
-#define DEBUGGING 1
+#define DEBUGGING 0
 
 #if DEBUGGING
 #define DEBUG_MSG_LIT(str) print_message(app, string_u8_litexpr(str))
@@ -13,15 +13,15 @@
 #define DEBUG_MSG_STR(str)
 #endif
 
-global const u64 custom_keywords_per_buffer = 256;
-global const u64 custom_types_per_buffer = 512;
+global const u64 custom_keywords_per_buffer = 16;
+global const u64 custom_types_per_buffer = 256;
 
 struct jp_buffer_data_t {
     Arena custom_keyword_type_arena;
-
+    
     String_Const_u8 custom_keywords[custom_keywords_per_buffer] = {};
     u64             custom_keywords_end = 0;
-
+    
     String_Const_u8 custom_types[custom_types_per_buffer] = {};
     u64             custom_types_end = 0;
 };
@@ -59,12 +59,12 @@ jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
             return true;
         }
     }
-
+    
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {
         Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
         jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                        jp_buffer_data_t);
+                                                         jp_buffer_data_t);
         if (buffer_data) {
             for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
                 if (string_match(keyword, buffer_data->custom_keywords[i])){
@@ -86,12 +86,12 @@ jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
             return true;
         }
     }
-
+    
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {
         Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
         jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                            jp_buffer_data_t);
+                                                         jp_buffer_data_t);
         if (buffer_data) {
             for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
                 if (string_match(type, buffer_data->custom_types[i])){
@@ -110,7 +110,7 @@ jp_push_custom_keyword(Application_Links* app, Buffer_ID buffer, String_Const_u8
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
-
+    
     if(!jp_is_custom_keyword(app, new_keyword)) {
         if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
             buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
@@ -140,7 +140,7 @@ jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 ne
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
-
+    
     if (!jp_is_custom_type(app, new_type)) {
         if (buffer_data->custom_types_end < custom_types_per_buffer) {
             buffer_data->custom_types[buffer_data->custom_types_end++] =
@@ -192,18 +192,18 @@ custom_layer_init(Application_Links *app)
     set_custom_hook(app, HookID_BeginBuffer, jp_begin_buffer);
     set_custom_hook(app, HookID_RenderCaller, jp_render_caller);
     set_custom_hook(app, HookID_SaveFile, jp_file_save);
-
+    
     mapping_init(tctx, &framework_mapping);
     
     // NOTE(jack): If None of the custom bindings are working, check that the the config/ file
     // has mapping=""; rather than mapping="choose";
     // 4.1.6 chaned the default setting to ""
     JackPunterBindings(&framework_mapping);
-
+    
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
     global_scope_data->custom_keyword_type_arena = make_arena_system();
-
+    
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint8_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint16_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint32_t"));
@@ -212,6 +212,7 @@ custom_layer_init(Application_Links *app)
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int16_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int32_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int64_t"));
+    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("size_t"));
 }
 
 #endif // FCODER_JACK_PUNTER

@@ -30,11 +30,12 @@ CUSTOM_DOC("Log Custom_keywords")
     do {
         jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
                                                          jp_buffer_data_t);
-
+        
         for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
             log_string(app, buffer_data->custom_keywords[i]);
+            log_string(app, string_u8_litexpr("\n"));
         }
-
+        
         buffer = get_buffer_next(app, buffer, Access_Read);
     } while (buffer);
 }
@@ -46,11 +47,12 @@ CUSTOM_DOC("Log Custom_keywords")
     do {
         jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
                                                          jp_buffer_data_t);
-
+        
         for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
             log_string(app, buffer_data->custom_types[i]);
+            log_string(app, string_u8_litexpr("\n"));
         }
-
+        
         buffer = get_buffer_next(app, buffer, Access_Read);
     } while (buffer);
 }

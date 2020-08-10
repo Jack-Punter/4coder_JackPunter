@@ -57,11 +57,12 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                             DEBUG_MSG_STR(di_string);
                             DEBUG_MSG_LIT("\n");
                         } else {
-                            DEBUG_MSG_LIT("Array Full. Couldn't add new #define keyword: ");
-                            DEBUG_MSG_STR(di_string);
-                            DEBUG_MSG_LIT("\n");
+                            log_string(app, string_u8_litexpr("Array Full. Couldn't add new #define type: "));
+                            log_string(app, di_string);
+                            log_string(app, string_u8_litexpr("\n"));
                         }
                     }
+                    // NOTE(jack): If the dt_token (keyword) is not a type or it is a custom keyword
                     else if ((dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token)) ||
                              jp_is_custom_keyword(app, dt_string))
                     {
@@ -70,9 +71,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                             DEBUG_MSG_STR(di_string);
                             DEBUG_MSG_LIT("\n");
                         } else {
-                            DEBUG_MSG_LIT("Array Full. Couldn't add new #define keyword: ");
-                            DEBUG_MSG_STR(di_string);
-                            DEBUG_MSG_LIT("\n");
+                            log_string(app, string_u8_litexpr("Array Full. Couldn't add new #define keyword: "));
+                            log_string(app, di_string);
+                            log_string(app, string_u8_litexpr("\n"));
                         }
                     }
                 }
@@ -113,9 +114,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                                 DEBUG_MSG_STR(inner_struct_type);
                                 DEBUG_MSG_LIT("\n");
                             } else { 
-                                DEBUG_MSG_LIT("Array Full. Couldn't add new struct typedef type: ");
-                                DEBUG_MSG_STR(inner_struct_type);
-                                DEBUG_MSG_LIT("\n");
+                                log_string(app, string_u8_litexpr("Array Full. Couldn't add new struct typedef type: "));
+                                log_string(app, inner_struct_type);
+                                log_string(app, string_u8_litexpr("\n"));
                             }
                         }
 
@@ -152,10 +153,10 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                             DEBUG_MSG_LIT("New typedef type Added: ");
                             DEBUG_MSG_STR(di_string);
                             DEBUG_MSG_LIT("\n");
-                        } else { 
-                            DEBUG_MSG_LIT("Array Full. Couldn't add new typedef type: ");
-                            DEBUG_MSG_STR(di_string);
-                            DEBUG_MSG_LIT("\n");
+                        } else {
+                            log_string(app, string_u8_litexpr("Array Full. Couldn't add new typedef type: "));
+                            log_string(app, di_string);
+                            log_string(app, string_u8_litexpr("\n"));
                         }
                     }
 
@@ -174,9 +175,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                             DEBUG_MSG_STR(struct_name);
                             DEBUG_MSG_LIT("\n");
                         } else { 
-                            DEBUG_MSG_LIT("Array Full. Couldn't add new struct keyword: ");
-                            DEBUG_MSG_STR(struct_name);
-                            DEBUG_MSG_LIT("\n");
+                            log_string(app, string_u8_litexpr("Array Full. Couldn't add new struct type: "));
+                            log_string(app, struct_name);
+                            log_string(app, string_u8_litexpr("\n"));
                         }
                     }
                 }
