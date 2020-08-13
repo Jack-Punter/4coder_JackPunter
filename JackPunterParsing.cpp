@@ -15,7 +15,8 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
     if (token_array.tokens != 0)
     {
         Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
-        for (;;) {
+        for (;;)
+        {
             // NOTE(jack): Temporary scratchpad memory arena that gets free'd at scope close
             Scratch_Block scratch(app);
             Token *token = token_it_read(&it);
@@ -90,15 +91,33 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
             if (token->kind == TokenBaseKind_Keyword)
             {
                 // NOTE(jack): typedef uint8_t u8
-                if (token->sub_kind == TokenCppKind_Typedef) {
+                if (token->sub_kind == TokenCppKind_Typedef)
+                {
                     if (!token_it_inc_non_whitespace(&it)) {
                         DEBUG_MSG_LIT("typedef was the last token\n");
                         break;
                     }
                     Token *second_token = token_it_read(&it);
                     
-                    // typedef struct { int x, int y } myStruct;
-                    if (second_token->sub_kind == TokenCppKind_Struct) {
+
+                    // NOTE(jack): typedef enum { TILE_NONE, TILE_WALL, ... }
+                    if (second_token->sub_kind == TokenCppKind_Enum) {
+                        b32 failed = false;
+                        // NOTE(jack): Skip until the end of the enum declaration
+                        do {
+                            if (!token_it_inc_non_whitespace(&it)) {
+                                DEBUG_MSG_LIT("typedef's existing type was the last token\n");
+                                failed = true;
+                            }
+                            second_token = token_it_read(&it);
+                        } while(!failed && second_token->kind != TokenBaseKind_ScopeClose);
+                    }
+
+                    // NOTE(jack): typedef struct { int x, int y } myStruct;
+                    // TODO(jack): typedef union { myStruct s; int a[2]; } myUnion;
+                    //             typedef enum { RED, GREEN, ...} myEnum;
+                    if (second_token->sub_kind == TokenCppKind_Struct || second_token->sub_kind == TokenCppKind_Union)
+                    {
                         if (!token_it_inc_non_whitespace(&it)) {
                             DEBUG_MSG_LIT("typedef's existing type was the last token\n");
                             break;
@@ -118,17 +137,33 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                                 log_string(app, inner_struct_type);
                                 log_string(app, string_u8_litexpr("\n"));
                             }
+                        } else if (second_token->kind == TokenBaseKind_ScopeOpen) {
+                            b32 result = token_it_dec_non_whitespace(&it);
+                            // NOTE(jack): we have iterated forward to this point so shouldn't fail.
+                            Assert(result);
                         }
 
                         b32 failed = false;
+                        int open_counter = 0;
                         // NOTE(jack): Skip until the end of the struct declaration
-                        do {
-                            if (!token_it_inc_non_whitespace(&it)) {
-                                DEBUG_MSG_LIT("typedef's existing type was the last token\n");
-                                failed = true;
-                            }
-                            second_token = token_it_read(&it);
-                        } while(!failed && second_token->kind != TokenBaseKind_ScopeClose);
+                        {
+                            Scratch_Block do_memory(app);
+                            do {
+                                if (!token_it_inc_non_whitespace(&it)) {
+                                    DEBUG_MSG_LIT("typedef's existing type was the last token\n");
+                                    failed = true;
+                                }
+                                second_token = token_it_read(&it);
+                                String_Const_u8 current_token = push_buffer_range(app, do_memory, buffer_id,
+                                                                                  {second_token->pos, second_token->pos + second_token->size});
+
+                                if (second_token->kind == TokenBaseKind_ScopeOpen) {
+                                    ++open_counter;
+                                } else if (second_token->kind == TokenBaseKind_ScopeClose) {
+                                    --open_counter;
+                                }
+                            } while(!failed && !(second_token->kind == TokenBaseKind_ScopeClose && open_counter == 0));
+                        }
                     }
      
                     Token *di_token;
@@ -147,7 +182,6 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                     String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id,
                                                                   {di_token->pos, di_token->pos + di_token->size});
 
-                    // NOTE(jack): This will prevent adding an existing keyword, which shouldn't really happne
                     if (di_token->kind == TokenBaseKind_Identifier) {
                         if (jp_push_custom_type(app, buffer_id, di_string)) {
                             DEBUG_MSG_LIT("New typedef type Added: ");
@@ -161,7 +195,9 @@ jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
                     }
 
                 // NOTE(jack): struct MyStruct {int x, int y};
-                } else if (token->sub_kind == TokenCppKind_Struct) {
+                //             union MyUnion { struct {int x, int y}; int a[2]; };
+                // TODO(jack): may fail on: enum class MyEnum
+                } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union) {
                     if (!token_it_inc_non_whitespace(&it)) {
                         DEBUG_MSG_LIT("typedef was the last token\n");
                         break;

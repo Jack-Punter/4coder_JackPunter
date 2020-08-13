@@ -40,7 +40,6 @@ JackPunterGlobalBinding(Mapping *mapping, i64 global_id)
     Bind(execute_previous_cli,          KeyCode_Z, KeyCode_Alt, KeyCode_Shift);
     Bind(command_lister,                KeyCode_P, KeyCode_Shift, KeyCode_Control);
     Bind(project_command_lister,        KeyCode_X, KeyCode_Alt, KeyCode_Shift);
-    // TODO(jack): Find another key combination for this, it clashed with ctrl+shift+I?
     Bind(list_all_functions_current_buffer_lister, KeyCode_I, KeyCode_Alt);
     
     Bind(exit_4coder,          KeyCode_F4, KeyCode_Alt);
@@ -156,6 +155,8 @@ JackPunterCodeBinding(Mapping *mapping, i64 file_id, i64 code_id)
     Bind(move_right_alpha_numeric_or_camel_boundary, KeyCode_Right, KeyCode_Control);
     
     Bind(comment_line_toggle,        KeyCode_Semicolon, KeyCode_Control);
+    Bind(if0_off,                    KeyCode_Semicolon, KeyCode_Control, KeyCode_Shift);
+
     Bind(word_complete,              KeyCode_Tab);
     Bind(auto_indent_range,          KeyCode_Tab, KeyCode_Control);
     Bind(auto_indent_line_at_cursor, KeyCode_Tab, KeyCode_Shift);
@@ -176,7 +177,6 @@ JackPunterCodeBinding(Mapping *mapping, i64 file_id, i64 code_id)
     Bind(select_next_scope_after_current,  KeyCode_Quote, KeyCode_Alt, KeyCode_Shift);
     Bind(place_in_scope,                   KeyCode_ForwardSlash, KeyCode_Alt);
     Bind(delete_current_scope,             KeyCode_Minus, KeyCode_Alt);
-    Bind(if0_off,                          KeyCode_I, KeyCode_Alt);
     Bind(open_file_in_quotes,              KeyCode_1, KeyCode_Alt);
     Bind(open_matching_file_cpp,           KeyCode_2, KeyCode_Alt);
     Bind(write_zero_struct,                KeyCode_0, KeyCode_Control);
