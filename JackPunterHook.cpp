@@ -9,7 +9,7 @@ CUSTOM_DOC("Jack Punter save file")
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
     if (*active_command_map == (Command_Map_ID)mapid_code) {
-        jp_parse_keywods_types(app, buffer_id);
+        jp_parse_keywords_types(app, buffer_id);
     }
 
     return 0;
@@ -26,7 +26,7 @@ CUSTOM_DOC("Jack Punter begin buffer")
     if (*active_command_map == (Command_Map_ID)mapid_code) {
         jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, jp_buffer_data_t);
         buffer_data->custom_keyword_type_arena = make_arena_system();
-        jp_parse_keywods_types(app, buffer_id);
+        jp_parse_keywords_types(app, buffer_id);
     }
     
     return 0;

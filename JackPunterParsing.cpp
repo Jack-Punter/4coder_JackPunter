@@ -47,7 +47,7 @@ jp_get_next_identifier_token(Application_Links *app, Token_Iterator_Array *it)
 }
 
 function void
-jp_parse_keywods_types(Application_Links *app, Buffer_ID buffer_id)
+jp_parse_keywords_types(Application_Links *app, Buffer_ID buffer_id)
 {
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
