@@ -23,6 +23,50 @@ CUSTOM_DOC("Switch to an open buffer in the other panel")
     view_enqueue_command_function(app, vid, interactive_switch_buffer);
 }
 
+CUSTOM_UI_COMMAND_SIG(jp_cut_line)
+CUSTOM_DOC("Cut the line that the cursor is on")
+{
+    View_ID view = get_active_view(app, Access_ReadWriteVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+    i64 pos = view_get_cursor_pos(app, view);
+    i64 line = get_line_number_from_pos(app, buffer, pos);
+    Range_i64 range = get_line_pos_range(app, buffer, line);
+    range.end += 1;
+    i32 size = (i32)buffer_get_size(app, buffer);
+    range.end = clamp_top(range.end, size);
+    if (range_size(range) == 0 || buffer_get_char(app, buffer, range.end - 1) != '\n'){
+        range.start -= 1;
+        range.first = clamp_bot(0, range.first);
+    }
+
+    if (clipboard_post_buffer_range(app, 0, buffer, range)) {
+        buffer_replace_range(app, buffer, range, string_u8_litexpr(""));
+    }
+}
+
+CUSTOM_UI_COMMAND_SIG(jp_copy_line)
+CUSTOM_DOC("Copy the line that the cursor is on")
+{
+    View_ID view = get_active_view(app, Access_ReadWriteVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+    i64 pos = view_get_cursor_pos(app, view);
+    i64 line = get_line_number_from_pos(app, buffer, pos);
+    Range_i64 range = get_line_pos_range(app, buffer, line);
+    range.end += 1;
+    i32 size = (i32)buffer_get_size(app, buffer);
+    range.end = clamp_top(range.end, size);
+    if (range_size(range) == 0 || buffer_get_char(app, buffer, range.end - 1) != '\n'){
+        range.start -= 1;
+        range.first = clamp_bot(0, range.first);
+    }
+
+    clipboard_post_buffer_range(app, 0, buffer, range);
+}
+
+/***********************************************************************************/
+/*                     NOTE(jack): CUSTOM KEYWORD/TYPE LISTING                     */
+/***********************************************************************************/
+
 CUSTOM_UI_COMMAND_SIG(jp_log_custom_keywords)
 CUSTOM_DOC("Log Custom_keywords")
 {
@@ -56,6 +100,10 @@ CUSTOM_DOC("Log Custom_keywords")
         buffer = get_buffer_next(app, buffer, Access_Read);
     } while (buffer);
 }
+
+/***********************************************************************************/
+/*                            NOTE(jack): TODO LISTING                             */
+/***********************************************************************************/
 
 function void
 jp_list_todos(Application_Links *app, Buffer_ID buffer_id, String_Const_u8 user) {

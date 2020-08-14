@@ -105,6 +105,7 @@ JackPunterFileBinding(Mapping *mapping, i64 global_id, i64 file_id)
     Bind(set_mark,                    KeyCode_Space, KeyCode_Control);
     Bind(replace_in_range,            KeyCode_A, KeyCode_Control);
     Bind(copy,                        KeyCode_C, KeyCode_Control);
+    Bind(jp_copy_line,                KeyCode_C, KeyCode_Control, KeyCode_Shift);
     Bind(delete_range,                KeyCode_D, KeyCode_Control);
     Bind(delete_line,                 KeyCode_D, KeyCode_Control, KeyCode_Shift);
     Bind(center_view,                 KeyCode_E, KeyCode_Control);
@@ -130,6 +131,7 @@ JackPunterFileBinding(Mapping *mapping, i64 global_id, i64 file_id)
     Bind(paste_and_indent,            KeyCode_V, KeyCode_Control);
     Bind(paste_next_and_indent,       KeyCode_V, KeyCode_Control, KeyCode_Shift);
     Bind(cut,                         KeyCode_X, KeyCode_Control);
+    Bind(jp_cut_line,                 KeyCode_X, KeyCode_Control, KeyCode_Shift);
     Bind(redo,                        KeyCode_Y, KeyCode_Control);
     Bind(undo,                        KeyCode_Z, KeyCode_Control);
     Bind(view_buffer_other_panel,     KeyCode_1, KeyCode_Control);
