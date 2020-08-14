@@ -47,8 +47,8 @@ CUSTOM_DOC("Cut the line that the cursor is on")
 CUSTOM_UI_COMMAND_SIG(jp_copy_line)
 CUSTOM_DOC("Copy the line that the cursor is on")
 {
-    View_ID view = get_active_view(app, Access_ReadWriteVisible);
-    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadWriteVisible);
+    View_ID view = get_active_view(app, Access_ReadVisible);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_ReadVisible);
     i64 pos = view_get_cursor_pos(app, view);
     i64 line = get_line_number_from_pos(app, buffer, pos);
     Range_i64 range = get_line_pos_range(app, buffer, line);
