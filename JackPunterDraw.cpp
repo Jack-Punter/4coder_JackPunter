@@ -80,12 +80,11 @@ jp_draw_cpp_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, 
         }
 
         Scratch_Block scratch(app);
-
-        String_Const_u8 lexeme = push_buffer_range(app, scratch, buffer,
-                                                   {token->pos, token->pos + token->size});
+        Range_i64 r = Ii64(token);
+        String_Const_u8 lexeme = push_buffer_range(app, scratch, buffer, r);
         ARGB_Color argb = jp_get_token_color_cpp(app, *token, lexeme);
 
-        paint_text_color(app, text_layout_id, Ii64_size(token->pos, token->size), argb);
+        paint_text_color(app, text_layout_id, r, argb);
         if (!token_it_inc_all(&it)) {
             break;
         }

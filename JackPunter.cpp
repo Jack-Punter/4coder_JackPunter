@@ -105,69 +105,68 @@ jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
     return false;
 }
 
-function b32
+function void
+jp_push_custom_keyword(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_keyword) {
+    b32 result = true;
+    if(!jp_is_custom_keyword(app, new_keyword)) {
+        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
+            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
+            result = true;
+        } else {
+            result = false;
+        }
+    }
+    if (result) {
+        DEBUG_MSG_LIT("New custom keyword added: ");
+        DEBUG_MSG_STR(new_keyword);
+        DEBUG_MSG_LIT("\n");
+    } else {
+        log_string(app, string_u8_litexpr("Array Full. Couldn't add custom keyword: "));
+        log_string(app, new_keyword);
+        log_string(app, string_u8_litexpr("\n"));
+    }
+}
+
+function void
 jp_push_custom_keyword(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_keyword) {
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
-    
-    if(!jp_is_custom_keyword(app, new_keyword)) {
-        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
-            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
-            return true;
-        }
-        return false;
-    }
-    return true;
+    jp_push_custom_keyword(app, buffer_data, new_keyword);
 }
 
-function b32
-jp_push_custom_keyword(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_keyword) {
-    if(!jp_is_custom_keyword(app, new_keyword)) {
-        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
-            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
-            return true;
+function void
+jp_push_custom_type(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_type) {
+    b32 result = true;
+    if (!jp_is_custom_type(app, new_type)) {
+        if (buffer_data->custom_types_end < custom_types_per_buffer) {
+            buffer_data->custom_types[buffer_data->custom_types_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
+        } else {
+            result = false;
         }
-        return false;
     }
-    return true;
+    if (result) {
+        DEBUG_MSG_LIT("New custom type added: ");
+        DEBUG_MSG_STR(new_type);
+        DEBUG_MSG_LIT("\n");
+    } else {
+        log_string(app, string_u8_litexpr("Array Full. Couldn't add custom type: "));
+        log_string(app, new_type);
+        log_string(app, string_u8_litexpr("\n"));
+    }
 }
 
-function b32
+function void
 jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_type) {
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
-    
-    if (!jp_is_custom_type(app, new_type)) {
-        if (buffer_data->custom_types_end < custom_types_per_buffer) {
-            buffer_data->custom_types[buffer_data->custom_types_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
-            return true;
-        }
-        return false;
-    }
-    return true;
-}
-
-function b32
-jp_push_custom_type(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_type) {
-    if (!jp_is_custom_type(app, new_type)) {
-        if (buffer_data->custom_types_end < custom_types_per_buffer) {
-            buffer_data->custom_types[buffer_data->custom_types_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
-            return true;
-        }
-        return false;
-    }
-    return true;
+    jp_push_custom_type(app, buffer_data, new_type);
 }
 
 global bool GlobalIsRecordingMacro = false;
-
-
 
 #include "JackPunterParsing.cpp"
 // NOTE(jack): Custom Command Definitions
