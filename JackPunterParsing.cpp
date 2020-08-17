@@ -166,7 +166,9 @@ jp_parse_keywords_types(Application_Links *app, Buffer_ID buffer_id)
                     String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id, Ii64(di_token));
                     jp_push_custom_type(app, buffer_id, di_string);
 
-                } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union) {
+                } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
+                           token->sub_kind == TokenCppKind_Class )
+                {
                     // NOTE(jack): struct MyStruct {int x, int y};
                     //             union MyUnion { struct {int x, int y}; int a[2]; };
                     if (!token_it_inc_non_whitespace(&it)) {
