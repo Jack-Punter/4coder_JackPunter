@@ -136,9 +136,8 @@ jp_list_todos(Application_Links *app, Buffer_ID buffer_id, String_Const_u8 user)
             {
                 // NOTE(jack): I beleive that this sets a reset point in the memory arena*
                 Temp_Memory temp = begin_temp(scratch);
-                String_Const_u8 comment_text = push_buffer_range(app, scratch, buffer_id,
-                                                                 {token->pos, token->pos + token->size});
-                String_Const_u8 todo = string_u8_litexpr("TODO(");
+                String_Const_u8 comment_text = push_buffer_range(app, scratch, buffer_id, Ii64(token));
+                String_Const_u8 todo = string_u8_litexpr("TODO");
                 for (i64 index = token->pos;
                      comment_text.size > 0;
                      comment_text = string_skip(comment_text, 1), index += 1)
@@ -147,10 +146,18 @@ jp_list_todos(Application_Links *app, Buffer_ID buffer_id, String_Const_u8 user)
                     if(string_match(prefix, todo)) {
                         i64 line_number = get_line_number_from_pos(app, buffer_id, token->pos);
                         insertf(&out, "%.*s:%lld: ", string_expand(buffer_name), line_number);
+
                         if(user.size != 0) {
-                            String_Const_u8 todo_user = string_skip(comment_text, prefix.size);
+                            // NOTE(jack): prefix.size + 1 to skip the open bracket "TODO(jack): "
+                            String_Const_u8 todo_user = string_skip(comment_text, prefix.size + 1);
                             todo_user = string_prefix(todo_user, user.size);
                             if (string_match(todo_user, user)) {
+                                
+                                u64 newline_pos = string_find_first(comment_text, '\n');
+                                if ( newline_pos != comment_text.size) {
+                                    comment_text = string_prefix(comment_text, newline_pos);
+                                }
+
                                 insert_string(&out, comment_text);
                                 insertc(&out, '\n');
                                 log_string(app, comment_text);
@@ -170,6 +177,7 @@ jp_list_todos(Application_Links *app, Buffer_ID buffer_id, String_Const_u8 user)
         
         end_buffer_insertion(&out);
 
+        change_active_panel(app);
         View_ID view = get_active_view(app, Access_Always);
         view_set_buffer(app, view, todos_buffer, 0);
         
