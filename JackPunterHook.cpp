@@ -4,6 +4,8 @@
 BUFFER_HOOK_SIG(jp_file_save)
 CUSTOM_DOC("Jack Punter save file")
 {
+    clean_trailing_whitespace(app);
+    
     default_file_save(app, buffer_id);
 
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
