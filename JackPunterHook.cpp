@@ -211,8 +211,7 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
         draw_line_number_margin(app, view_id, buffer, face_id, text_layout_id, line_number_rect);
     }
     
-    // NOTE(jack): Call my copy of the default renderer which has some custom comment keywords
-    // I.e IMPORTANT
+    // NOTE(jack): Call my copy of the default renderer which does custom highlighting
     jp_render_buffer(app, view_id, face_id, buffer, text_layout_id, region);
     
     text_layout_free(app, text_layout_id);
