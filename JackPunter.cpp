@@ -212,6 +212,9 @@ custom_layer_init(Application_Links *app)
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int32_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int64_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("size_t"));
+
+    jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("override"));
+    jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("final"));
 }
 
 #endif // FCODER_JACK_PUNTER
