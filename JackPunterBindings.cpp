@@ -172,8 +172,8 @@ JackPunterCodeBinding(Mapping *mapping, i64 file_id, i64 code_id)
     Bind(open_long_braces,                 KeyCode_LeftBracket,     KeyCode_Alt);
     Bind(open_long_braces_semicolon,       KeyCode_LeftBracket,     KeyCode_Alt, KeyCode_Shift);
     Bind(open_long_braces_break,           KeyCode_RightBracket,    KeyCode_Alt, KeyCode_Shift);
-    Bind(select_surrounding_scope,         KeyCode_Tick,            KeyCode_Control);
-    Bind(select_surrounding_scope_maximal, KeyCode_Tick,            KeyCode_Control, KeyCode_Shift);
+    //Bind(select_surrounding_scope,         KeyCode_Tick,            KeyCode_Control);
+    //Bind(select_surrounding_scope_maximal, KeyCode_Tick,            KeyCode_Control, KeyCode_Shift);
     Bind(select_prev_scope_absolute,       KeyCode_LeftBracket,     KeyCode_Control);
     Bind(select_prev_top_most_scope,       KeyCode_LeftBracket,     KeyCode_Control, KeyCode_Shift);
     Bind(select_next_scope_absolute,       KeyCode_RightBracket,    KeyCode_Control);
