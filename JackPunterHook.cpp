@@ -20,7 +20,72 @@ CUSTOM_DOC("Jack Punter save file")
 BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
 {
-    default_begin_buffer(app, buffer_id);
+    //=================== MODIFIED DEFAULT BEGIN BUFFER ===================
+        ProfileScope(app, "begin buffer");
+    
+    Scratch_Block scratch(app);
+    
+    b32 treat_as_code = false;
+    String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer_id);
+
+    if (file_name.size > 0) {
+        String_Const_u8_Array extensions = global_config.code_exts;
+        String_Const_u8 ext = string_file_extension(file_name);
+    
+        for (i32 i = 0; i < extensions.count; ++i) {
+            if (string_match(ext, extensions.strings[i])){
+                treat_as_code = true;
+                break;
+            }
+        }
+    }
+    
+    Command_Map_ID map_id = (treat_as_code)?(mapid_code):(mapid_file);
+    Managed_Scope scope = buffer_get_managed_scope(app, buffer_id);
+    Command_Map_ID *map_id_ptr = scope_attachment(app, scope, buffer_map_id, Command_Map_ID);
+    *map_id_ptr = map_id;
+    
+    Line_Ending_Kind setting = guess_line_ending_kind_from_buffer(app, buffer_id);
+    Line_Ending_Kind *eol_setting = scope_attachment(app, scope, buffer_eol_setting, Line_Ending_Kind);
+    *eol_setting = setting;
+    
+    // NOTE(allen): Decide buffer settings
+    b32 wrap_lines = true;
+    b32 use_lexer = false;
+    if (treat_as_code){
+        wrap_lines = global_config.enable_code_wrapping;
+        use_lexer = true;
+    }
+    
+    String_Const_u8 buffer_name = push_buffer_base_name(app, scratch, buffer_id);
+    if (buffer_name.size > 0 && buffer_name.str[0] == '*' && buffer_name.str[buffer_name.size - 1] == '*'){
+        wrap_lines = global_config.enable_output_wrapping;
+    }
+    
+    if (use_lexer){
+        ProfileBlock(app, "begin buffer kick off lexer");
+        Async_Task *lex_task_ptr = scope_attachment(app, scope, buffer_lex_task, Async_Task);
+        *lex_task_ptr = async_task_no_dep(&global_async_system, do_full_lex_async, make_data_struct(&buffer_id));
+    }
+    
+    {
+        b32 *wrap_lines_ptr = scope_attachment(app, scope, buffer_wrap_lines, b32);
+        *wrap_lines_ptr = wrap_lines;
+    }
+    
+    if (use_lexer){
+        buffer_set_layout(app, buffer_id, layout_virt_indent_index_generic);
+    }
+    else{
+        if (treat_as_code){
+            buffer_set_layout(app, buffer_id, layout_virt_indent_literal_generic);
+        }
+        else{
+            buffer_set_layout(app, buffer_id, layout_generic);
+        }
+    }
+    
+    //=====================================================================
 
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
