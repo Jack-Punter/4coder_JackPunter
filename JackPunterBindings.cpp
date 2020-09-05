@@ -179,6 +179,7 @@ JackPunterCodeBinding(Mapping *mapping, i64 file_id, i64 code_id)
     Bind(select_next_scope_absolute,       KeyCode_RightBracket,    KeyCode_Control);
     Bind(select_next_scope_after_current,  KeyCode_RightBracket,    KeyCode_Control, KeyCode_Shift);
 
+    Bind(jp_insert_deref_access,           KeyCode_Period, KeyCode_Control);
     Bind(place_in_scope,                   KeyCode_ForwardSlash, KeyCode_Alt);
     Bind(delete_current_scope,             KeyCode_Minus, KeyCode_Alt);
     Bind(open_file_in_quotes,              KeyCode_1, KeyCode_Alt);

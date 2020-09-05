@@ -23,6 +23,12 @@ CUSTOM_DOC("Switch to an open buffer in the other panel")
     view_enqueue_command_function(app, vid, interactive_switch_buffer);
 }
 
+CUSTOM_UI_COMMAND_SIG(jp_insert_deref_access)
+CUSTOM_DOC("Insert -> to access a pointer's data member")
+{
+    write_text(app, string_u8_litexpr("->"));
+}
+
 CUSTOM_UI_COMMAND_SIG(jp_cut_line)
 CUSTOM_DOC("Cut the line that the cursor is on")
 {
