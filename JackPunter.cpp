@@ -26,6 +26,7 @@ struct jp_buffer_data_t {
     u64             custom_types_end = 0;
 };
 CUSTOM_ID(attachment, jp_buffer_attachment);
+CUSTOM_ID(attachment, buffer_parse_keywords_types_task);
 
 global i32 type_token_kinds[] = {
     TokenCppKind_Void,

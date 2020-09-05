@@ -17,6 +17,24 @@ CUSTOM_DOC("Jack Punter save file")
     return 0;
 }
 
+struct AsyncParserData {
+    Buffer_ID buffer_id;
+    Async_Task lexer_task;
+};
+
+void
+jp_parse_keyword_types_async(Async_Context *actx, Data data) {
+    if(data.size == sizeof(AsyncParserData)) {
+        AsyncParserData* ParserData = (AsyncParserData*)data.data;
+        async_task_wait(actx->app, &global_async_system, ParserData->lexer_task);
+
+        acquire_global_frame_mutex(actx->app);
+        jp_parse_keywords_types(actx->app, ParserData->buffer_id);
+        release_global_frame_mutex(actx->app);
+    }
+}
+
+
 BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
 {
@@ -62,9 +80,9 @@ CUSTOM_DOC("Jack Punter begin buffer")
         wrap_lines = global_config.enable_output_wrapping;
     }
     
+    Async_Task *lex_task_ptr = scope_attachment(app, scope, buffer_lex_task, Async_Task);
     if (use_lexer){
         ProfileBlock(app, "begin buffer kick off lexer");
-        Async_Task *lex_task_ptr = scope_attachment(app, scope, buffer_lex_task, Async_Task);
         *lex_task_ptr = async_task_no_dep(&global_async_system, do_full_lex_async, make_data_struct(&buffer_id));
     }
     
@@ -93,7 +111,16 @@ CUSTOM_DOC("Jack Punter begin buffer")
     if (*active_command_map == (Command_Map_ID)mapid_code) {
         jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, jp_buffer_data_t);
         buffer_data->custom_keyword_type_arena = make_arena_system();
-        jp_parse_keywords_types(app, buffer_id);
+
+        //jp_parse_keywords_types(app, buffer_id);
+        {
+            ProfileBlock(app, "begin buffer kick off parser");
+            Async_Task *parser_task_ptr = scope_attachment(app, scope, buffer_parse_keywords_types_task, Async_Task);
+            AsyncParserData data = { 0 };
+            data.buffer_id = buffer_id;
+            data.lexer_task = *lex_task_ptr;
+            *parser_task_ptr = async_task_no_dep(&global_async_system, jp_parse_keyword_types_async, make_data_struct(&data));
+        }
     }
     
     return 0;
