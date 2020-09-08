@@ -2,7 +2,7 @@
 
 set codeDir=%cd%
 
-mkdir %codeDir%\build
+IF NOT EXIST %codeDir%\build mkdir %codeDir%\build
 
 pushd %codeDir%\build\
 

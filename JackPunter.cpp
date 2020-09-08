@@ -64,7 +64,7 @@ jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {
         Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                          jp_buffer_data_t);
         if (buffer_data) {
             for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
@@ -91,7 +91,7 @@ jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {
         Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                          jp_buffer_data_t);
         if (buffer_data) {
             for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
@@ -132,7 +132,7 @@ jp_push_custom_keyword(Application_Links* app, jp_buffer_data_t* buffer_data, St
 function void
 jp_push_custom_keyword(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_keyword) {
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                      jp_buffer_data_t);
     jp_push_custom_keyword(app, buffer_data, new_keyword);
 }
@@ -162,7 +162,7 @@ jp_push_custom_type(Application_Links* app, jp_buffer_data_t* buffer_data, Strin
 function void
 jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_type) {
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                      jp_buffer_data_t);
     jp_push_custom_type(app, buffer_data, new_type);
 }
@@ -214,7 +214,7 @@ custom_layer_init(Application_Links *app)
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int64_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("size_t"));
     jp_push_custom_type(app, global_scope_data, string_u8_litexpr("auto"));
-
+    
     jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("override"));
     jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("final"));
 }

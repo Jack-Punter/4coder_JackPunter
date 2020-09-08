@@ -7,30 +7,55 @@ CUSTOM_DOC("Jack Punter save file")
     clean_trailing_whitespace(app);
     
     default_file_save(app, buffer_id);
-
+    
+    Scratch_Block scratch(app);
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
+    
+    String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer_id);
+    String_Const_u8 ext = string_file_extension(buffer_filename);
+
     if (*active_command_map == (Command_Map_ID)mapid_code) {
-        jp_parse_keywords_types(app, buffer_id);
+        if (string_match(ext, string_u8_litexpr("ds"))) {
+            jp_parse_data_desk_types(app, buffer_id);
+        } else {
+            jp_parse_cpp_keywords_types(app, buffer_id);
+        }
     }
 
     return 0;
 }
 
+enum BufferType {
+    C_CodeFile,
+    DataDesk_CodeFile,
+};
+
 struct AsyncParserData {
     Buffer_ID buffer_id;
     Async_Task lexer_task;
+    BufferType type;
 };
 
 void
 jp_parse_keyword_types_async(Async_Context *actx, Data data) {
     if(data.size == sizeof(AsyncParserData)) {
+        Application_Links *app = actx->app;
         AsyncParserData* ParserData = (AsyncParserData*)data.data;
         async_task_wait(actx->app, &global_async_system, ParserData->lexer_task);
 
-        acquire_global_frame_mutex(actx->app);
-        jp_parse_keywords_types(actx->app, ParserData->buffer_id);
-        release_global_frame_mutex(actx->app);
+
+        // TODO(jack): Make these propper async tasks rather than just calling them within mutex locks.
+        // NOTE(jack): Not 100% sure this is correct when i was pushing buffer names and
+        // Checking file extensions here, 4coder would infinte hang upon loading files someitmes
+        acquire_global_frame_mutex(app);
+        if (ParserData->type == DataDesk_CodeFile) {
+            jp_parse_data_desk_types(app, ParserData->buffer_id);
+        } else if (ParserData->type == C_CodeFile) {
+            jp_parse_cpp_keywords_types(app, ParserData->buffer_id);
+        }
+
+        release_global_frame_mutex(app);
     }
 }
 
@@ -39,7 +64,7 @@ BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
 {
     //=================== MODIFIED DEFAULT BEGIN BUFFER ===================
-        ProfileScope(app, "begin buffer");
+    ProfileScope(app, "begin buffer");
     
     Scratch_Block scratch(app);
     
@@ -119,10 +144,19 @@ CUSTOM_DOC("Jack Punter begin buffer")
             AsyncParserData data = { 0 };
             data.buffer_id = buffer_id;
             data.lexer_task = *lex_task_ptr;
+
+            String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer_id);
+            String_Const_u8 ext = string_file_extension(buffer_filename);
+
+            if(string_match(ext, string_u8_litexpr("ds"))) {
+                data.type = DataDesk_CodeFile;
+            } else {
+                data.type = C_CodeFile;
+            }
             *parser_task_ptr = async_task_no_dep(&global_async_system, jp_parse_keyword_types_async, make_data_struct(&data));
         }
     }
-    
+
     return 0;
 }
 
