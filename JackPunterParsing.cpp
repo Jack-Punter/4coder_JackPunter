@@ -351,9 +351,69 @@ jp_fill_buffer_data_with_types(Application_Links *app, Buffer_ID buffer_id)
                     }
                 }
             }
+            if (!token_it_inc_non_whitespace(&it)) {
+                break;
+            }
         }
     }
 }
 #endif
+
+// TODO(jack): we probably want to be smarter here for performance reasons,
+// This will currently attempt to push a function when it is declared, and
+// when it is called, resulting in a lot of string comparisons].
+function void
+jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
+{
+    // NOTE(jack): Uses the Code Index to identify type indentifiers,
+    // Does not include typedef's, defines or class
+    // typedef struct name {} name; dosent work
+    ProfileBlock(app, "jp_fill_buffer_data_with_functions");
+
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                     jp_buffer_data_t);
+    // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
+    buffer_data->functions_end = 0;
+    buffer_data->functions_end = 0;
+
+    Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
+    if (token_array.tokens != 0)
+    {
+        Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
+        for (;;)
+        {
+            Token *token = token_it_read(&it);
+            
+            Scratch_Block scratch(app);
+            if (token->kind == TokenBaseKind_Identifier)
+            {
+                String_Const_u8 string = push_buffer_range(app, scratch, buffer_id,
+                                                           Ii64(token->pos, token->pos + token->size));
+
+                Code_Index_File* file = code_index_get_file(buffer_id);
+                if (file != 0)
+                {
+                    for (i32 i = 0; i < file->note_array.count; i += 1)
+                    {
+                        Code_Index_Note* this_note = file->note_array.ptrs[i];
+                        if (string_match(this_note->text, string)) {
+                            if (this_note->note_kind == CodeIndexNote_Function) {
+                                jp_push_function(app, buffer_data, string);
+                            }
+                            // NOTE(jack): We have found the note for this token,
+                            // so we can break out of the note loop.
+                            break;
+                        }
+                    }
+                }
+            }
+
+            if (!token_it_inc_non_whitespace(&it)) {
+                break;
+            }
+        }
+    }
+}
 
 #endif /* FCODER_JACK_PUNTER_PARSING */

@@ -1,5 +1,4 @@
-
-defcolor_back = 0xFF0C0C0C;
+defcolor_back = 0xFF000000;
 defcolor_margin = 0xFF181818;
 defcolor_margin_hover = 0xFF252525;
 defcolor_margin_active = 0xFF323232;
@@ -15,7 +14,7 @@ defcolor_text_default = 0xFF90B080;
 defcolor_at_highlight = 0xFFFF44DD;
 defcolor_comment = 0xFF2090F0;
 defcolor_comment_pop = {0xFF00A000, 0xFFA00000, 0xFFA0A000};
-defcolor_keyword = {0xFFD08F20, 0xFF00A0A0};
+defcolor_keyword = {0xFFD08F20, 0xFF00A0A0, 0xFFBCD0B3};
 defcolor_str_constant = 0xFF50FF30;
 defcolor_char_constant = defcolor_str_constant;
 defcolor_int_constant = defcolor_str_constant;
@@ -42,5 +41,5 @@ defcolor_pop2 = 0xFFFF0000;
 defcolor_back_cycle = {0x10A00000, 0x0C00A000, 0x0C0000A0, 0x0CA0A000};
 defcolor_text_cycle = {0xFFA00000, 0xFF00A000, 0xFF0030B0, 0xFFA0A000};
 
-defcolor_line_numbers_back = 0xFF101010;
-defcolor_line_numbers_text = 0xFF404040;
+defcolor_line_numbers_back = 0xFF0C0C0C;
+defcolor_line_numbers_text = 0xFF303030;

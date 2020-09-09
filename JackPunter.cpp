@@ -13,8 +13,11 @@
 #define DEBUG_MSG_STR(str)
 #endif
 
+// TODO(jack): These shouldn't be necessary, make these be dynamic arrays.
+// These are currently very arbitrary
 global const u64 custom_keywords_per_buffer = 16;
 global const u64 custom_types_per_buffer = 256;
+global const u64 functions_per_buffer = 256;
 
 struct jp_buffer_data_t {
     Arena custom_keyword_type_arena;
@@ -24,6 +27,11 @@ struct jp_buffer_data_t {
     
     String_Const_u8 custom_types[custom_types_per_buffer] = {};
     u64             custom_types_end = 0;
+
+    String_Const_u8 functions[functions_per_buffer] = {};
+    u64             functions_end = 0;
+
+    b32 parse_contents = false;
 };
 CUSTOM_ID(attachment, jp_buffer_attachment);
 CUSTOM_ID(attachment, buffer_parse_keywords_types_task);
@@ -40,6 +48,7 @@ global i32 type_token_kinds[] = {
     TokenCppKind_Unsigned,
     TokenCppKind_Signed,
 };
+
 function b32
 jp_is_type_token(Token* token){
     for (int i = 0; i < ArrayCount(type_token_kinds); ++i) {
@@ -96,6 +105,27 @@ jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
         if (buffer_data) {
             for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
                 if (string_match(type, buffer_data->custom_types[i])){
+                    return true;
+                }
+            }
+        }
+        // NOTE(jack): returns zero when its the last buffer
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
+    return false;
+}
+
+function b32
+jp_is_function(Application_Links *app, String_Const_u8 function_str) {
+    // NOTE(jack): I cant see myself pushing functions to always exist so im not checking global scope
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
+                                                         jp_buffer_data_t);
+        if (buffer_data) {
+            for (size_t i = 0; i < buffer_data->functions_end; ++i){
+                if (string_match(function_str, buffer_data->functions[i])){
                     return true;
                 }
             }
@@ -167,6 +197,36 @@ jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 ne
     jp_push_custom_type(app, buffer_data, new_type);
 }
 
+function void
+jp_push_function(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_function) {
+    b32 result = true;
+    if (!jp_is_function(app, new_function)) {
+        if (buffer_data->functions_end < functions_per_buffer) {
+            buffer_data->functions[buffer_data->functions_end++] =
+                push_string_copy(&buffer_data->custom_keyword_type_arena, new_function);
+        } else {
+            result = false;
+        }
+    }
+    if (result) {
+        DEBUG_MSG_LIT("New function added: ");
+        DEBUG_MSG_STR(new_function);
+        DEBUG_MSG_LIT("\n");
+    } else {
+        log_string(app, string_u8_litexpr("Array Full. Couldn't add function: "));
+        log_string(app, new_function);
+        log_string(app, string_u8_litexpr("\n"));
+    }
+}
+
+function void
+jp_push_function(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_function) {
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
+                                                     jp_buffer_data_t);
+    jp_push_function(app, buffer_data, new_function);
+}
+
 global bool GlobalIsRecordingMacro = false;
 
 #include "JackPunterParsing.cpp"
@@ -189,6 +249,7 @@ custom_layer_init(Application_Links *app)
     
     // NOTE(allen): default hooks and command maps
     set_all_default_hooks(app);
+    set_custom_hook(app, HookID_Tick, jp_tick);
     set_custom_hook(app, HookID_BeginBuffer, jp_begin_buffer);
     set_custom_hook(app, HookID_RenderCaller, jp_render_caller);
     set_custom_hook(app, HookID_SaveFile, jp_file_save);

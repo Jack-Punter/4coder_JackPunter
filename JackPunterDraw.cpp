@@ -40,6 +40,8 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
                 color = finalize_color(defcolor_keyword, 1);
             } else if (jp_is_custom_keyword(app, lexeme)) {
                 color = finalize_color(defcolor_keyword, 0);
+            } else if (jp_is_function(app, lexeme)) {
+                color = finalize_color(defcolor_keyword, 2);
             }
         }break;
     }

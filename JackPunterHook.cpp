@@ -1,6 +1,37 @@
 #if !defined(FCODER_JACK_PUNTER_HOOKS)
 #define FCODER_JACK_PUNTER_HOOKS
 
+static void
+jp_tick(Application_Links *app, Frame_Info frame_info) 
+{
+    default_tick(app, frame_info);
+
+    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
+    do {
+        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
+        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
+                                                         jp_buffer_data_t);
+        if (buffer_data && buffer_data->parse_contents) {
+            Scratch_Block scratch(app);
+            Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
+            String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer);
+            String_Const_u8 ext = string_file_extension(buffer_filename);
+
+            if (*active_command_map == (Command_Map_ID)mapid_code) {
+                if (string_match(ext, string_u8_litexpr("ds"))) {
+                    jp_parse_data_desk_types(app, buffer);
+                } else {
+                    jp_parse_cpp_keywords_types(app, buffer);
+                    jp_fill_buffer_data_with_functions(app, buffer);
+                }
+            }
+        }
+
+        // NOTE(jack): returns zero when its the last buffer
+        buffer = get_buffer_next(app, buffer, Access_Read);
+    } while (buffer);
+}
+
 BUFFER_HOOK_SIG(jp_file_save)
 CUSTOM_DOC("Jack Punter save file")
 {
@@ -20,6 +51,7 @@ CUSTOM_DOC("Jack Punter save file")
             jp_parse_data_desk_types(app, buffer_id);
         } else {
             jp_parse_cpp_keywords_types(app, buffer_id);
+            jp_fill_buffer_data_with_functions(app, buffer_id);
         }
     }
 
@@ -37,8 +69,10 @@ struct AsyncParserData {
     BufferType type;
 };
 
+#if 0
 void
-jp_parse_keyword_types_async(Async_Context *actx, Data data) {
+jp_parse_keyword_types_async(Async_Context *actx, Data data)
+{
     if(data.size == sizeof(AsyncParserData)) {
         Application_Links *app = actx->app;
         AsyncParserData* ParserData = (AsyncParserData*)data.data;
@@ -53,12 +87,30 @@ jp_parse_keyword_types_async(Async_Context *actx, Data data) {
             jp_parse_data_desk_types(app, ParserData->buffer_id);
         } else if (ParserData->type == C_CodeFile) {
             jp_parse_cpp_keywords_types(app, ParserData->buffer_id);
+            jp_fill_buffer_data_with_functions(app, ParserData->buffer_id);
         }
 
         release_global_frame_mutex(app);
     }
 }
+#endif
 
+void
+jp_trigger_parse_buffer(Async_Context *actx, Data data)
+{
+    if(data.size == sizeof(AsyncParserData)) {
+        Application_Links *app = actx->app;
+        AsyncParserData* ParserData = (AsyncParserData*)data.data;
+        async_task_wait(actx->app, &global_async_system, ParserData->lexer_task);
+
+        acquire_global_frame_mutex(app);
+        Managed_Scope buffer_scope = buffer_get_managed_scope(app, ParserData->buffer_id);
+        jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                        jp_buffer_data_t);
+        buffer_data->parse_contents = true;
+        release_global_frame_mutex(app);
+    }
+}
 
 BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
@@ -153,7 +205,8 @@ CUSTOM_DOC("Jack Punter begin buffer")
             } else {
                 data.type = C_CodeFile;
             }
-            *parser_task_ptr = async_task_no_dep(&global_async_system, jp_parse_keyword_types_async, make_data_struct(&data));
+            //*parser_task_ptr = async_task_no_dep(&global_async_system, jp_parse_keyword_types_async, make_data_struct(&data));
+            *parser_task_ptr = async_task_no_dep(&global_async_system, jp_trigger_parse_buffer, make_data_struct(&data));
         }
     }
 
@@ -165,8 +218,8 @@ jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
                       Buffer_ID buffer, Text_Layout_ID text_layout_id,
                       Rect_f32 rect) 
 {
-    ProfileScope(app, "render buffer");
-    
+    ProfileScope(app, "JP render buffer");
+
     View_ID active_view = get_active_view(app, Access_Always);
     b32 is_active_view = (active_view == view_id);
     Rect_f32 prev_clip = draw_set_clip(app, rect);
@@ -275,8 +328,9 @@ jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
 }
 
 function void
-jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id){
-    ProfileScope(app, "default render caller");
+jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
+{
+    ProfileScope(app, "jp render caller");
     View_ID active_view = get_active_view(app, Access_Always);
     b32 is_active_view = (active_view == view_id);
     
