@@ -38,7 +38,7 @@ defcolor_base = 0xFF000000;
 defcolor_pop1 = 0xFF3C57DC;
 defcolor_pop2 = 0xFFFF0000;
 
-defcolor_back_cycle = {0x10A00000, 0x0C00A000, 0x0C0000A0, 0x0CA0A000};
+defcolor_back_cycle = {0x20A00000, 0x1C00A000, 0x1C0000A0, 0x1CA0A000};
 defcolor_text_cycle = {0xFFA00000, 0xFF00A000, 0xFF0030B0, 0xFFA0A000};
 
 defcolor_line_numbers_back = 0xFF0C0C0C;
