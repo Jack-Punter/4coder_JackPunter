@@ -61,6 +61,7 @@ jp_is_type_token(Token* token){
 
 function b32
 jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
+    ProfileScope(app, "JP Is Custom Keyword");
     // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
@@ -88,6 +89,7 @@ jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
 }
 function b32
 jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
+    ProfileScope(app, "JP Is Custom Type");
     // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
@@ -117,6 +119,7 @@ jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
 
 function b32
 jp_is_function(Application_Links *app, String_Const_u8 function_str) {
+    ProfileScope(app, "JP Is Function");
     // NOTE(jack): I cant see myself pushing functions to always exist so im not checking global scope
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {

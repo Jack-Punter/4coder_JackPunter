@@ -49,6 +49,7 @@ jp_get_next_identifier_token(Application_Links *app, Token_Iterator_Array *it)
 function void
 jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
 {
+    ProfileScope(app, "JP Parse Cpp Keywords Types");
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
@@ -215,6 +216,7 @@ Foo :: struct {
 function void
 jp_parse_data_desk_types(Application_Links *app, Buffer_ID buffer_id) 
 {
+    ProfileScope(app, "jp Parse Data Desk Types");
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
@@ -314,7 +316,7 @@ jp_fill_buffer_data_with_types(Application_Links *app, Buffer_ID buffer_id)
     // NOTE(jack): Uses the Code Index to identify type indentifiers,
     // Does not include typedef's, defines or class
     // typedef struct name {} name; dosent work
-    ProfileBlock(app, "jp_fill_buffer_data_with_types");
+    ProfileScope(app, "jp_fill_buffer_data_with_types");
 
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
@@ -368,7 +370,7 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
     // NOTE(jack): Uses the Code Index to identify type indentifiers,
     // Does not include typedef's, defines or class
     // typedef struct name {} name; dosent work
-    ProfileBlock(app, "jp_fill_buffer_data_with_functions");
+    ProfileScope(app, "jp_fill_buffer_data_with_functions");
 
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 

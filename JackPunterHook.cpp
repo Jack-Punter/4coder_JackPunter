@@ -4,6 +4,7 @@
 static void
 jp_tick(Application_Links *app, Frame_Info frame_info) 
 {
+    ProfileScope(app, "JP Tick Hook");
     default_tick(app, frame_info);
 
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
@@ -35,6 +36,7 @@ jp_tick(Application_Links *app, Frame_Info frame_info)
 BUFFER_HOOK_SIG(jp_file_save)
 CUSTOM_DOC("Jack Punter save file")
 {
+    ProfileScope(app, "JP File Save");
     clean_trailing_whitespace(app);
     
     default_file_save(app, buffer_id);
@@ -116,7 +118,7 @@ BUFFER_HOOK_SIG(jp_begin_buffer)
 CUSTOM_DOC("Jack Punter begin buffer")
 {
     //=================== MODIFIED DEFAULT BEGIN BUFFER ===================
-    ProfileScope(app, "begin buffer");
+    ProfileScope(app, "JP begin buffer");
     
     Scratch_Block scratch(app);
     

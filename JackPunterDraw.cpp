@@ -4,6 +4,7 @@
 function ARGB_Color
 jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexeme)
 {
+    ProfileScope(app, "JP Get Token Color CPP");
     ARGB_Color color = fcolor_resolve(fcolor_id(defcolor_text_default));
     switch (token.kind){
         case TokenBaseKind_Preprocessor:
@@ -71,6 +72,7 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
 
 function void
 jp_draw_cpp_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, Token_Array *array,  Buffer_ID buffer){
+    ProfileScope(app, "jp_draw_cpp_token_colors");
     Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
     i64 first_index = token_index_from_pos(array, visible_range.first);
     Token_Iterator_Array it = token_iterator_index(0, array, first_index);
