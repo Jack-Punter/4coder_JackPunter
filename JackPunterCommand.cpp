@@ -227,4 +227,40 @@ CUSTOM_DOC("List todos from current buffer for current user") {
     jp_list_todos(app, buffer, global_config.user_name);
 }
 
+CUSTOM_UI_COMMAND_SIG(jp_kill_rect)
+CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the mark")
+{
+    View_ID vid = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, vid, Access_Always);
+    
+    i64 cursor = view_get_cursor_pos(app, vid);
+    i64 mark = view_get_mark_pos(app, vid);
+
+    i64 min_cursor = Min(cursor, mark);
+    i64 max_cursor = Max(cursor, mark);
+
+    i64 min_line = get_line_number_from_pos(app, buffer, min_cursor);
+    i64 min_line_start = get_line_start_pos(app, buffer, min_line);
+
+    i64 max_line = get_line_number_from_pos(app, buffer, max_cursor);
+    i64 max_line_start = get_line_start_pos(app, buffer, max_line);
+
+    i64 min_column = Min(min_cursor - min_line_start,
+                         max_cursor - max_line_start);
+
+    i64 max_column = Max(min_cursor - min_line_start,
+                         max_cursor - max_line_start);
+
+    // for each line that the cursors mark (inclusive)
+    // NOTE(jack): The history group stuff makes the edit undo in a single command.
+    History_Group new_history_group = history_group_begin(app, buffer);
+    for (i64 line = min_line; line <= max_line; ++line)
+    {
+        i64 line_start = get_line_start_pos(app, buffer, line);
+        Range_i64 line_kill_range = Ii64(line_start + min_column, line_start + max_column);
+        buffer_replace_range(app, buffer, line_kill_range, string_u8_litexpr(""));
+    }
+    history_group_end(new_history_group);
+}
+
 #endif // FCODER_JACK_PUNTER_COMMANDS

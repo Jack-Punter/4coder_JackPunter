@@ -108,6 +108,7 @@ JackPunterFileBinding(Mapping *mapping, i64 global_id, i64 file_id)
     Bind(jp_copy_line,                KeyCode_C, KeyCode_Control, KeyCode_Shift);
     Bind(delete_range,                KeyCode_D, KeyCode_Control);
     Bind(delete_line,                 KeyCode_D, KeyCode_Control, KeyCode_Shift);
+    Bind(jp_kill_rect,                KeyCode_D, KeyCode_Control, KeyCode_Alt);
     Bind(center_view,                 KeyCode_E, KeyCode_Control);
     Bind(left_adjust_view,            KeyCode_E, KeyCode_Control, KeyCode_Shift);
     Bind(search,                      KeyCode_F, KeyCode_Control);
