@@ -227,12 +227,14 @@ CUSTOM_DOC("List todos from current buffer for current user") {
     jp_list_todos(app, buffer, global_config.user_name);
 }
 
-CUSTOM_UI_COMMAND_SIG(jp_kill_rect)
-CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the mark")
+/***********************************************************************************/
+/*                          NOTE(jack): Rectangular Edits                          */
+/***********************************************************************************/
+
+function void
+ReplaceRectangleRange(Application_Links *app, Buffer_ID buffer, View_ID vid,
+                      String_Const_u8 replacment)
 {
-    View_ID vid = get_active_view(app, Access_Always);
-    Buffer_ID buffer = view_get_buffer(app, vid, Access_Always);
-    
     i64 cursor = view_get_cursor_pos(app, vid);
     i64 mark = view_get_mark_pos(app, vid);
 
@@ -257,10 +259,37 @@ CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the ma
     for (i64 line = min_line; line <= max_line; ++line)
     {
         i64 line_start = get_line_start_pos(app, buffer, line);
-        Range_i64 line_kill_range = Ii64(line_start + min_column, line_start + max_column);
-        buffer_replace_range(app, buffer, line_kill_range, string_u8_litexpr(""));
+        Range_i64 line_kill_range = Ii64(line_start + min_column,
+                                         line_start + max_column);
+        buffer_replace_range(app, buffer, line_kill_range, replacment);
     }
     history_group_end(new_history_group);
+}
+
+CUSTOM_UI_COMMAND_SIG(jp_kill_rect)
+CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the mark")
+{
+    View_ID vid = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, vid, Access_Always);
+    ReplaceRectangleRange(app, buffer, vid, SCu8(""));
+}
+
+CUSTOM_UI_COMMAND_SIG(jp_replace_rect)
+CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the mark")
+{
+    View_ID vid = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, vid, Access_Always);
+    
+    Query_Bar_Group group(app);
+    Query_Bar replace_bar = {};
+    replace_bar.prompt = SCu8("Replace: ");
+    u8 replace_buffer[KB(1)];
+    replace_bar.string.str = replace_buffer;
+    replace_bar.string_capacity = sizeof(replace_buffer);
+
+    if (query_user_string(app, &replace_bar) && replace_bar.string.size > 0) {
+        ReplaceRectangleRange(app, buffer, vid, replace_bar.string);
+    }
 }
 
 #endif // FCODER_JACK_PUNTER_COMMANDS
