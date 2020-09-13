@@ -123,6 +123,7 @@ JackPunterFileBinding(Mapping *mapping, i64 global_id, i64 file_id)
     Bind(reopen,                      KeyCode_O, KeyCode_Control, KeyCode_Shift);
     Bind(query_replace,               KeyCode_Q, KeyCode_Control);
     Bind(query_replace_identifier,    KeyCode_Q, KeyCode_Control, KeyCode_Shift);
+    Bind(jp_replace_rect,             KeyCode_Q, KeyCode_Control, KeyCode_Alt);
     Bind(query_replace_selection,     KeyCode_Q, KeyCode_Alt);
     Bind(reverse_search,              KeyCode_R, KeyCode_Control);
     Bind(save,                        KeyCode_S, KeyCode_Control);

@@ -232,7 +232,7 @@ CUSTOM_DOC("List todos from current buffer for current user") {
 /***********************************************************************************/
 
 function void
-ReplaceRectangleRange(Application_Links *app, Buffer_ID buffer, View_ID vid,
+replace_in_rect(Application_Links *app, Buffer_ID buffer, View_ID vid,
                       String_Const_u8 replacment)
 {
     i64 cursor = view_get_cursor_pos(app, vid);
@@ -271,7 +271,7 @@ CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the ma
 {
     View_ID vid = get_active_view(app, Access_Always);
     Buffer_ID buffer = view_get_buffer(app, vid, Access_Always);
-    ReplaceRectangleRange(app, buffer, vid, SCu8(""));
+    replace_in_rect(app, buffer, vid, SCu8(""));
 }
 
 CUSTOM_UI_COMMAND_SIG(jp_replace_rect)
@@ -288,7 +288,7 @@ CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the ma
     replace_bar.string_capacity = sizeof(replace_buffer);
 
     if (query_user_string(app, &replace_bar) && replace_bar.string.size > 0) {
-        ReplaceRectangleRange(app, buffer, vid, replace_bar.string);
+        replace_in_rect(app, buffer, vid, replace_bar.string);
     }
 }
 
