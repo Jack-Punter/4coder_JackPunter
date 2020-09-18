@@ -13,27 +13,33 @@
 #define DEBUG_MSG_STR(str)
 #endif
 
-// TODO(jack): These shouldn't be necessary, make these be dynamic arrays.
-// These are currently very arbitrary
-global const u64 custom_keywords_per_buffer = 16;
-global const u64 custom_types_per_buffer = 256;
-global const u64 functions_per_buffer = 256;
+global const i32 custom_highlight_base_size = 32;
+
+enum HighlightType : u64 {
+    HighlightType_Function,
+    HighlightType_Type,
+    HighlightType_Keyword,
+    HighlightType_None,
+};
+
+struct jp_app_data_t {
+    // NOTE(jack): This will store the custom highlight information for all buffers
+    Base_Allocator* table_allocator;
+    Table_Data_u64 custom_highlight_table;
+};
 
 struct jp_buffer_data_t {
-    Arena custom_keyword_type_arena;
-    
-    String_Const_u8 custom_keywords[custom_keywords_per_buffer] = {};
-    u64             custom_keywords_end = 0;
-    
-    String_Const_u8 custom_types[custom_types_per_buffer] = {};
-    u64             custom_types_end = 0;
-
-    String_Const_u8 functions[functions_per_buffer] = {};
-    u64             functions_end = 0;
+    // NOTE(jack): This will store the custom highlight tokens (keys for table lookup)
+    // for this buffer
+    // cleared on reparse (as well as erased from app table)
+    Arena custom_highlights_arena;
+    String_Const_u8_Array custom_highlight_array;
 
     b32 parse_contents = false;
 };
+
 CUSTOM_ID(attachment, jp_buffer_attachment);
+CUSTOM_ID(attachment, jp_app_attachment);
 CUSTOM_ID(attachment, buffer_parse_keywords_types_task);
 
 global i32 type_token_kinds[] = {
@@ -43,10 +49,12 @@ global i32 type_token_kinds[] = {
     TokenCppKind_Int,
     TokenCppKind_Float,
     TokenCppKind_Double,
-    TokenCppKind_Long,
+    TokenCppKind_Long,-
     TokenCppKind_Short,
     TokenCppKind_Unsigned,
     TokenCppKind_Signed,
+    TokenCppKind_Const,
+    TokenCppKind_Volatile
 };
 
 function b32
@@ -60,174 +68,47 @@ jp_is_type_token(Token* token){
 }
 
 function b32
-jp_is_custom_keyword(Application_Links *app, String_Const_u8 keyword) {
-    ProfileScope(app, "JP Is Custom Keyword");
-    // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
+jp_insert_custom_highlight(Application_Links *app, String_Const_u8 string,
+                           HighlightType type) 
+{
+    ProfileScope(app, "JP Insert Custom Highlight");
     Managed_Scope global_scope = get_global_managed_scope(app);
-    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
-    for (size_t i = 0; i < global_scope_data->custom_keywords_end; ++i){
-        if (string_match(keyword, global_scope_data->custom_keywords[i])){
-            return true;
-        }
-    }
+    jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
     
-    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
-    do {
-        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                         jp_buffer_data_t);
-        if (buffer_data) {
-            for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
-                if (string_match(keyword, buffer_data->custom_keywords[i])){
-                    return true;
-                }
-            }
-        }
-        buffer = get_buffer_next(app, buffer, Access_Read);
-    } while (buffer);
-    return false;
+    //String_Const_u8 perm_string = push_string_copy(&app_data->highlight_table_arena, string);
+    Data key = {};
+    key.data = string.str;
+    key.size = string.size;
+    return table_insert(&app_data->custom_highlight_table, key, type);
 }
-function b32
-jp_is_custom_type(Application_Links *app, String_Const_u8 type) {
-    ProfileScope(app, "JP Is Custom Type");
-    // NOTE(jack): Check the global scope array for hardcoded custom keywords / types
+
+function HighlightType
+jp_custom_highlight_lookup(Application_Links *app, String_Const_u8 string)
+{
+    ProfileScope(app, "JP Custom Highlight Lookup");
+    HighlightType Result;
     Managed_Scope global_scope = get_global_managed_scope(app);
-    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
-    for (size_t i = 0; i < global_scope_data->custom_types_end; ++i){
-        if (string_match(type, global_scope_data->custom_types[i])){
-            return true;
-        }
+    jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
+
+    Data lookup_data = {};
+    lookup_data.data = string.str;
+    lookup_data.size = string.size;
+    if(!table_read(&app_data->custom_highlight_table, lookup_data, (u64 *)&Result)) {
+        Result = HighlightType_None;
     }
-    
-    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
-    do {
-        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                         jp_buffer_data_t);
-        if (buffer_data) {
-            for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
-                if (string_match(type, buffer_data->custom_types[i])){
-                    return true;
-                }
-            }
-        }
-        // NOTE(jack): returns zero when its the last buffer
-        buffer = get_buffer_next(app, buffer, Access_Read);
-    } while (buffer);
-    return false;
+    return Result;
 }
 
 function b32
-jp_is_function(Application_Links *app, String_Const_u8 function_str) {
-    ProfileScope(app, "JP Is Function");
-    // NOTE(jack): I cant see myself pushing functions to always exist so im not checking global scope
-    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
-    do {
-        Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                         jp_buffer_data_t);
-        if (buffer_data) {
-            for (size_t i = 0; i < buffer_data->functions_end; ++i){
-                if (string_match(function_str, buffer_data->functions[i])){
-                    return true;
-                }
-            }
-        }
-        // NOTE(jack): returns zero when its the last buffer
-        buffer = get_buffer_next(app, buffer, Access_Read);
-    } while (buffer);
-    return false;
-}
-
-function void
-jp_push_custom_keyword(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_keyword) {
-    b32 result = true;
-    if(!jp_is_custom_keyword(app, new_keyword)) {
-        if (buffer_data->custom_keywords_end < custom_keywords_per_buffer) {
-            buffer_data->custom_keywords[buffer_data->custom_keywords_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_keyword);
-            result = true;
-        } else {
-            result = false;
-        }
-    }
-    if (result) {
-        DEBUG_MSG_LIT("New custom keyword added: ");
-        DEBUG_MSG_STR(new_keyword);
-        DEBUG_MSG_LIT("\n");
-    } else {
-        log_string(app, string_u8_litexpr("Array Full. Couldn't add custom keyword: "));
-        log_string(app, new_keyword);
-        log_string(app, string_u8_litexpr("\n"));
-    }
-}
-
-function void
-jp_push_custom_keyword(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_keyword) {
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                     jp_buffer_data_t);
-    jp_push_custom_keyword(app, buffer_data, new_keyword);
-}
-
-function void
-jp_push_custom_type(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_type) {
-    b32 result = true;
-    if (!jp_is_custom_type(app, new_type)) {
-        if (buffer_data->custom_types_end < custom_types_per_buffer) {
-            buffer_data->custom_types[buffer_data->custom_types_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_type);
-        } else {
-            result = false;
-        }
-    }
-    if (result) {
-        DEBUG_MSG_LIT("New custom type added: ");
-        DEBUG_MSG_STR(new_type);
-        DEBUG_MSG_LIT("\n");
-    } else {
-        log_string(app, string_u8_litexpr("Array Full. Couldn't add custom type: "));
-        log_string(app, new_type);
-        log_string(app, string_u8_litexpr("\n"));
-    }
-}
-
-function void
-jp_push_custom_type(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_type) {
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                     jp_buffer_data_t);
-    jp_push_custom_type(app, buffer_data, new_type);
-}
-
-function void
-jp_push_function(Application_Links* app, jp_buffer_data_t* buffer_data, String_Const_u8 new_function) {
-    b32 result = true;
-    if (!jp_is_function(app, new_function)) {
-        if (buffer_data->functions_end < functions_per_buffer) {
-            buffer_data->functions[buffer_data->functions_end++] =
-                push_string_copy(&buffer_data->custom_keyword_type_arena, new_function);
-        } else {
-            result = false;
-        }
-    }
-    if (result) {
-        DEBUG_MSG_LIT("New function added: ");
-        DEBUG_MSG_STR(new_function);
-        DEBUG_MSG_LIT("\n");
-    } else {
-        log_string(app, string_u8_litexpr("Array Full. Couldn't add function: "));
-        log_string(app, new_function);
-        log_string(app, string_u8_litexpr("\n"));
-    }
-}
-
-function void
-jp_push_function(Application_Links* app, Buffer_ID buffer, String_Const_u8 new_function) {
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                     jp_buffer_data_t);
-    jp_push_function(app, buffer_data, new_function);
+jp_erase_custom_highlight(Application_Links *app, String_Const_u8 string)
+{
+    ProfileScope(app, "JP Erase Custom Highlight");
+    Managed_Scope global_scope = get_global_managed_scope(app);
+    jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
+    Data key = {};
+    key.data = string.str;
+    key.size = string.size;
+    return table_erase(&app_data->custom_highlight_table, key);
 }
 
 global bool GlobalIsRecordingMacro = false;
@@ -254,6 +135,7 @@ custom_layer_init(Application_Links *app)
     set_all_default_hooks(app);
     set_custom_hook(app, HookID_Tick, jp_tick);
     set_custom_hook(app, HookID_BeginBuffer, jp_begin_buffer);
+    set_custom_hook(app, HookID_EndBuffer, jp_end_buffer);
     set_custom_hook(app, HookID_RenderCaller, jp_render_caller);
     set_custom_hook(app, HookID_SaveFile, jp_file_save);
     
@@ -263,24 +145,26 @@ custom_layer_init(Application_Links *app)
     // has mapping=""; rather than mapping="choose";
     // 4.1.6 chaned the default setting to ""
     JackPunterBindings(&framework_mapping);
-    
+
     Managed_Scope global_scope = get_global_managed_scope(app);
-    jp_buffer_data_t* global_scope_data = scope_attachment(app, global_scope, jp_buffer_attachment, jp_buffer_data_t);
-    global_scope_data->custom_keyword_type_arena = make_arena_system();
-    
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint8_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint16_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint32_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("uint64_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int8_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int16_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int32_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("int64_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("size_t"));
-    jp_push_custom_type(app, global_scope_data, string_u8_litexpr("auto"));
-    
-    jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("override"));
-    jp_push_custom_keyword(app, global_scope_data, string_u8_litexpr("final"));
+    jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
+    app_data->table_allocator = get_base_allocator_system();
+    app_data->custom_highlight_table = make_table_Data_u64(app_data->table_allocator,
+                                                           custom_highlight_base_size);
+
+    jp_insert_custom_highlight(app, SCu8("uint8_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("uint16_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("uint32_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("uint64_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("int8_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("int16_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("int32_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("int64_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("size_t"), HighlightType_Type);
+    jp_insert_custom_highlight(app, SCu8("auto"), HighlightType_Type);
+
+    jp_insert_custom_highlight(app, SCu8("override"), HighlightType_Keyword);
+    jp_insert_custom_highlight(app, SCu8("final"), HighlightType_Keyword);
 }
 
 #endif // FCODER_JACK_PUNTER

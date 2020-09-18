@@ -68,45 +68,6 @@ CUSTOM_DOC("Copy the line that the cursor is on")
 
     clipboard_post_buffer_range(app, 0, buffer, range);
 }
-
-/***********************************************************************************/
-/*                     NOTE(jack): CUSTOM KEYWORD/TYPE LISTING                     */
-/***********************************************************************************/
-
-CUSTOM_UI_COMMAND_SIG(jp_log_custom_keywords)
-CUSTOM_DOC("Log Custom_keywords")
-{
-    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
-    do {
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
-                                                         jp_buffer_data_t);
-        
-        for (size_t i = 0; i < buffer_data->custom_keywords_end; ++i){
-            log_string(app, buffer_data->custom_keywords[i]);
-            log_string(app, string_u8_litexpr("\n"));
-        }
-        
-        buffer = get_buffer_next(app, buffer, Access_Read);
-    } while (buffer);
-}
-
-CUSTOM_UI_COMMAND_SIG(jp_log_custom_types)
-CUSTOM_DOC("Log Custom_keywords")
-{
-    Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
-    do {
-        jp_buffer_data_t *buffer_data = scope_attachment(app, buffer, jp_buffer_attachment, 
-                                                         jp_buffer_data_t);
-        
-        for (size_t i = 0; i < buffer_data->custom_types_end; ++i){
-            log_string(app, buffer_data->custom_types[i]);
-            log_string(app, string_u8_litexpr("\n"));
-        }
-        
-        buffer = get_buffer_next(app, buffer, Access_Read);
-    } while (buffer);
-}
-
 /***********************************************************************************/
 /*                            NOTE(jack): TODO LISTING                             */
 /***********************************************************************************/

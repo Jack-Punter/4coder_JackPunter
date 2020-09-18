@@ -1,6 +1,62 @@
 #if !defined(FCODER_JACK_PUNTER_PARSING)
 #define FCODER_JACK_PUNTER_PARSING
 
+struct Highlight_String_Data {
+    String_Const_u8 string;
+    HighlightType type;
+};
+
+struct Node_Highlight_String_Data {
+    Node_Highlight_String_Data *next;
+    Highlight_String_Data data;
+};
+
+struct List_Highlight_String_Data {
+    Node_Highlight_String_Data *first;
+    Node_Highlight_String_Data *last;
+    i32 node_count;
+};
+
+function void
+highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
+                          Highlight_String_Data data) {
+    Node_Highlight_String_Data *node = push_array(arena, Node_Highlight_String_Data, 1);
+    sll_queue_push(list->first, list->last, node);
+    node->data = data;
+    list->node_count += 1;
+}
+
+function void
+highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
+                          String_Const_u8 String, HighlightType type)
+{
+    Highlight_String_Data highlight_data = {};
+    highlight_data.string = String;
+    highlight_data.type = type;
+    highlight_string_list_push(arena, list, highlight_data);
+}
+
+function String_Const_u8_Array
+finalize_highlight_string_list(Application_Links *app, Arena *arena, 
+                                List_Highlight_String_Data *list)
+{
+    ProfileScope(app, "Finailze highlight string list");
+    String_Const_u8_Array Result = {};
+    Result.vals = push_array(arena, String_Const_u8, list->node_count);
+    Result.count = list->node_count;
+    i32 array_index = 0;
+    for (Node_Highlight_String_Data *node = list->first; node != 0; node = node->next) {
+        if(jp_custom_highlight_lookup(app, node->data.string) == HighlightType_None) {
+            Result.vals[array_index] = push_string_copy(arena, node->data.string);
+            jp_insert_custom_highlight(app, Result.vals[array_index], node->data.type);
+            ++array_index;
+        } else {
+            --Result.count;
+        }
+    }
+    return Result;
+}
+
 function b32
 jp_iterate_end_of_next_scope(Application_Links *app, Token_Iterator_Array *it)
 {
@@ -47,24 +103,18 @@ jp_get_next_identifier_token(Application_Links *app, Token_Iterator_Array *it)
 }
 
 function void
-jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
+jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
+                            List_Highlight_String_Data *list, Buffer_ID buffer_id)
 {
     ProfileScope(app, "JP Parse Cpp Keywords Types");
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                     jp_buffer_data_t);
-    // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
-    buffer_data->custom_keywords_end = 0;
-    buffer_data->custom_types_end = 0;
 
+    // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
     Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
     if (token_array.tokens != 0)
     {
         Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
         for (;;)
         {
-            // NOTE(jack): Temporary scratchpad memory arena that gets free'd at scope close
-            Scratch_Block scratch(app);
             Token *token = token_it_read(&it);
 
             String_Const_u8 token_string = push_buffer_range(app, scratch, buffer_id, Ii64(token));
@@ -91,18 +141,15 @@ jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
                
                 // If there is not a newline between di and dt
                 if(string_find_first(di_dt_separator, '\n') == di_dt_separator.size) {
-                    // NOTE(jack): If the defined to (dt) token is a keyword and the defined identifier
-                    // is not already a custom keyword
-                    if((dt_token->kind == TokenBaseKind_Keyword && jp_is_type_token(dt_token)) ||
-                       jp_is_custom_type(app, dt_string))
+                    // NOTE(jack): If the defined to (dt) token is a keyword and is a type
+                    if((dt_token->kind == TokenBaseKind_Keyword && jp_is_type_token(dt_token)))
                     {
-                        jp_push_custom_type(app, buffer_id, di_string);
+                        highlight_string_list_push(scratch, list, di_string, HighlightType_Type);
                     }
                     // NOTE(jack): If the dt_token (keyword) is not a type or it is a custom keyword
-                    else if ((dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token)) ||
-                              jp_is_custom_keyword(app, dt_string))
+                    else if (dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token))
                     {
-                        jp_push_custom_keyword(app, buffer_id, di_string);
+                        highlight_string_list_push(scratch, list, di_string, HighlightType_Keyword);
                     }
                 } else {
                     // NOTE(jack): If there was a new line we need to decrement to not miss the next line.
@@ -147,7 +194,7 @@ jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
                         // NOTE(jack): If the token after 'struct' is an identifier it is a new typename
                         if (second_token->kind == TokenBaseKind_Identifier) {
                             String_Const_u8 inner_struct_type = push_buffer_range(app, scratch, buffer_id, Ii64(second_token));
-                            jp_push_custom_type(app, buffer_id, inner_struct_type);
+                            highlight_string_list_push(scratch, list, inner_struct_type, HighlightType_Type);
                         } else if (second_token->kind == TokenBaseKind_ScopeOpen) {
                             b32 result = token_it_dec_non_whitespace(&it);
                             // NOTE(jack): we have iterated forward to this point so shouldn't fail.
@@ -166,8 +213,7 @@ jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
                         break;
                     }
                     String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id, Ii64(di_token));
-                    jp_push_custom_type(app, buffer_id, di_string);
-
+                    highlight_string_list_push(scratch, list, di_string, HighlightType_Type);
                 } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
                            token->sub_kind == TokenCppKind_Class )
                 {
@@ -180,7 +226,7 @@ jp_parse_cpp_keywords_types(Application_Links *app, Buffer_ID buffer_id)
                     Token *next_token = token_it_read(&it);
                     if(next_token->kind == TokenBaseKind_Identifier) {
                         String_Const_u8 struct_name = push_buffer_range(app, scratch, buffer_id, Ii64(next_token));
-                        jp_push_custom_type(app, buffer_id, struct_name);
+                        highlight_string_list_push(scratch, list, struct_name, HighlightType_Type);
                     }
                 }
                 // TODO(jack): highlight enum class types.
@@ -214,15 +260,12 @@ Foo :: struct {
 }
 */
 function void
-jp_parse_data_desk_types(Application_Links *app, Buffer_ID buffer_id) 
+jp_parse_data_desk_types(Application_Links *app, Arena *scratch,
+                         List_Highlight_String_Data *list, Buffer_ID buffer_id) 
 {
     ProfileScope(app, "jp Parse Data Desk Types");
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                     jp_buffer_data_t);
+
     // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
-    buffer_data->custom_keywords_end = 0;
-    buffer_data->custom_types_end = 0;
     Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
     
     Token_List typeTokens = {};
@@ -232,7 +275,6 @@ jp_parse_data_desk_types(Application_Links *app, Buffer_ID buffer_id)
         for (;;)
         {
             // NOTE(jack): Temporary scratchpad memory arena that gets free'd at scope close
-            Scratch_Block scratch(app);
             Token *token = token_it_read(&it);
             if (token->kind == TokenBaseKind_Identifier)
             {
@@ -261,7 +303,7 @@ jp_parse_data_desk_types(Application_Links *app, Buffer_ID buffer_id)
                          token->sub_kind == TokenCppKind_Union))
                     {
                         // NOTE(jack): If it was a type definition, add it as a custom type.
-                        jp_push_custom_type(app, buffer_data, token_string);
+                        highlight_string_list_push(scratch, list, token_string, HighlightType_Type);
                     }
                     else 
                     {
@@ -291,8 +333,7 @@ jp_parse_data_desk_types(Application_Links *app, Buffer_ID buffer_id)
 }
 #endif
 
-#if 0
-/* Code to find Identifier Tokens which are types
+/* The function Code_Index code can also be used for getting identifiers that are types.
 This was mostly copied from Ryan Fleury's customisation layer.
 He was doing this (#if 0'd out) in the render to colour custom types
 however was too slow, if a faster lookup is added to the code index
@@ -310,74 +351,16 @@ and would just requrie a code index lookup to determine if the token should
 be highlighted. I may also be able to leaverage this for keywords, but I
 haven't spent too long looking into the Code Index Notes.
 */
-function void
-jp_fill_buffer_data_with_types(Application_Links *app, Buffer_ID buffer_id)
-{
-    // NOTE(jack): Uses the Code Index to identify type indentifiers,
-    // Does not include typedef's, defines or class
-    // typedef struct name {} name; dosent work
-    ProfileScope(app, "jp_fill_buffer_data_with_types");
-
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                     jp_buffer_data_t);
-    // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
-    buffer_data->custom_keywords_end = 0;
-    buffer_data->custom_types_end = 0;
-
-    Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
-    if (token_array.tokens != 0)
-    {
-        Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
-        for (;;)
-        {
-            Token *token = token_it_read(&it);
-            
-            Scratch_Block scratch(app);
-            if (token->kind == TokenBaseKind_Identifier)
-            {
-                String_Const_u8 string = push_buffer_range(app, scratch, buffer_id,
-                                                           Ii64(token->pos, token->pos + token->size));
-
-                Code_Index_File* file = code_index_get_file(buffer_id);
-                if (file != 0)
-                {
-                    for (i32 i = 0; i < file->note_array.count; i += 1)
-                    {
-                        Code_Index_Note* this_note = file->note_array.ptrs[i];
-                        if (string_match(this_note->text, string) && 
-                            this_note->note_kind == CodeIndexNote_Type)
-                        {
-                            jp_push_custom_type(app, buffer_data, string);
-                        }
-                    }
-                }
-            }
-            if (!token_it_inc_non_whitespace(&it)) {
-                break;
-            }
-        }
-    }
-}
-#endif
 
 // TODO(jack): we probably want to be smarter here for performance reasons,
 // This will currently attempt to push a function when it is declared, and
 // when it is called, resulting in a lot of string comparisons].
 function void
-jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
+jp_fill_buffer_data_with_functions(Application_Links *app, Arena *scratch,
+                                   List_Highlight_String_Data *list, Buffer_ID buffer_id)
 {
-    // NOTE(jack): Uses the Code Index to identify type indentifiers,
-    // Does not include typedef's, defines or class
-    // typedef struct name {} name; dosent work
+    // NOTE(jack): Uses the Code Index to identify function indentifiers,
     ProfileScope(app, "jp_fill_buffer_data_with_functions");
-
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                     jp_buffer_data_t);
-    // NOTE(jack): "Empty" the current keyword/type arrays for this buffer.
-    buffer_data->functions_end = 0;
-    buffer_data->functions_end = 0;
 
     Token_Array token_array = get_token_array_from_buffer(app, buffer_id);
     if (token_array.tokens != 0)
@@ -387,11 +370,9 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
         {
             Token *token = token_it_read(&it);
             
-            Scratch_Block scratch(app);
             if (token->kind == TokenBaseKind_Identifier)
             {
-                String_Const_u8 string = push_buffer_range(app, scratch, buffer_id,
-                                                           Ii64(token->pos, token->pos + token->size));
+                String_Const_u8 string = push_token_lexeme(app, scratch, buffer_id, token);
 
                 Code_Index_File* file = code_index_get_file(buffer_id);
                 if (file != 0)
@@ -401,7 +382,10 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
                         Code_Index_Note* this_note = file->note_array.ptrs[i];
                         if (string_match(this_note->text, string)) {
                             if (this_note->note_kind == CodeIndexNote_Function) {
-                                jp_push_function(app, buffer_data, string);
+                                Highlight_String_Data highlight_data = {};
+                                highlight_data.string = string;
+                                highlight_data.type = HighlightType_Function;
+                                highlight_string_list_push(scratch, list, highlight_data);
                             }
                             // NOTE(jack): We have found the note for this token,
                             // so we can break out of the note loop.
@@ -416,6 +400,40 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Buffer_ID buffer_id)
             }
         }
     }
+}
+
+function void
+jp_parse_custom_highlights(Application_Links *app, Buffer_ID buffer_id)
+{
+    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+                                                     jp_buffer_data_t);
+
+    Scratch_Block scratch(app);
+    // NOTE(jack): remove all of this buffers custom highlights
+    for(int i = 0; i < buffer_data->custom_highlight_array.count; ++i) {
+        jp_erase_custom_highlight(app, buffer_data->custom_highlight_array.vals[i]);
+    }
+    linalloc_clear(&buffer_data->custom_highlights_arena);
+
+    // NOTE(jack): parse the buffers filling the list of custom highlight tokens.
+    //List_String_Const_u8 list = {};
+
+    List_Highlight_String_Data list {};
+
+    String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer_id);
+    String_Const_u8 ext = string_file_extension(buffer_filename);
+
+    if (string_match(ext, string_u8_litexpr("ds"))) {
+        jp_parse_data_desk_types(app, scratch, &list, buffer_id);
+    } else {
+        jp_parse_cpp_keywords_types(app, scratch, &list, buffer_id);
+        jp_fill_buffer_data_with_functions(app, scratch, &list, buffer_id );
+    }
+
+    // NOTE(jack): Fill buffer's list of custom highlights
+    buffer_data->custom_highlight_array = finalize_highlight_string_list(app, &buffer_data->custom_highlights_arena,
+                                                                         &list);
 }
 
 #endif /* FCODER_JACK_PUNTER_PARSING */
