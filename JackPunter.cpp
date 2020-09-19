@@ -23,10 +23,17 @@ enum HighlightType : u64 {
     HighlightType_None,
 };
 
+struct Highlight_Data {
+    HighlightType type;
+    Buffer_ID def_buffer;
+    i64 def_pos;
+};
+
 struct jp_app_data_t {
     // NOTE(jack): This will store the custom highlight information for all buffers
     Base_Allocator* table_allocator;
-    Table_Data_u64 custom_highlight_table;
+    Arena global_highlights_arena;
+    Table_Data_Data custom_highlight_table;
 };
 
 struct jp_buffer_data_t {
@@ -70,9 +77,10 @@ jp_is_type_token(Token* token){
 
 function b32
 jp_insert_custom_highlight(Application_Links *app, String_Const_u8 string,
-                           HighlightType type) 
+                           Data data) 
 {
     ProfileScope(app, "JP Insert Custom Highlight");
+    Assert(data.size == sizeof(Highlight_Data));
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
     
@@ -80,24 +88,26 @@ jp_insert_custom_highlight(Application_Links *app, String_Const_u8 string,
     Data key = {};
     key.data = string.str;
     key.size = string.size;
-    return table_insert(&app_data->custom_highlight_table, key, type);
+    return table_insert(&app_data->custom_highlight_table, key, data);
 }
 
-function HighlightType
-jp_custom_highlight_lookup(Application_Links *app, String_Const_u8 string)
+function b32
+jp_custom_highlight_lookup(Application_Links *app, String_Const_u8 string, Highlight_Data *out_val)
 {
     ProfileScope(app, "JP Custom Highlight Lookup");
-    HighlightType Result;
+    Data table_entry = {0};
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
 
-    Data lookup_data = {};
-    lookup_data.data = string.str;
-    lookup_data.size = string.size;
-    if(!table_read(&app_data->custom_highlight_table, lookup_data, (u64 *)&Result)) {
-        Result = HighlightType_None;
+    Data key_data = {0};
+    key_data.data = string.str;
+    key_data.size = string.size;
+    b32 read_success = table_read(&app_data->custom_highlight_table, key_data, &table_entry);
+    if (read_success) {
+        Assert(table_entry.size == sizeof(Highlight_Data));
+        *out_val = *(Highlight_Data *)table_entry.data;
     }
-    return Result;
+    return read_success;
 }
 
 function b32
@@ -150,22 +160,69 @@ custom_layer_init(Application_Links *app)
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
     app_data->table_allocator = get_base_allocator_system();
-    app_data->custom_highlight_table = make_table_Data_u64(app_data->table_allocator,
+    app_data->global_highlights_arena = make_arena_system();
+    app_data->custom_highlight_table = make_table_Data_Data(app_data->table_allocator,
                                                            custom_highlight_base_size);
 
-    jp_insert_custom_highlight(app, SCu8("uint8_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("uint16_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("uint32_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("uint64_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("int8_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("int16_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("int32_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("int64_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("size_t"), HighlightType_Type);
-    jp_insert_custom_highlight(app, SCu8("auto"), HighlightType_Type);
+    Highlight_Data not_defined_type = {HighlightType_Type, 0, 0};
+    Data nd_type_data = push_data_copy(&app_data->global_highlights_arena,
+                                       make_data_struct(&not_defined_type));
 
-    jp_insert_custom_highlight(app, SCu8("override"), HighlightType_Keyword);
-    jp_insert_custom_highlight(app, SCu8("final"), HighlightType_Keyword);
+    Highlight_Data not_defined_keyword = {HighlightType_Keyword, 0, 0};
+    Data nd_keyword_data = push_data_copy(&app_data->global_highlights_arena,
+                                              make_data_struct(&not_defined_keyword));
+    // CUSTOM TYPE HIGHLIGHTS
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint8_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint16_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint32_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint64_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int8_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int16_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int32_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int64_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("size_t")),
+        nd_type_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("auto")),
+        nd_type_data
+    );
+    
+
+    // CUSTOM KEYWORD HIGHLIGHTS
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("override")),
+        nd_keyword_data
+    );
+    jp_insert_custom_highlight(
+        app, push_string_copy(&app_data->global_highlights_arena, SCu8("final")),
+        nd_keyword_data
+    );
 }
 
 #endif // FCODER_JACK_PUNTER

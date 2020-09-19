@@ -3,7 +3,7 @@
 
 struct Highlight_String_Data {
     String_Const_u8 string;
-    HighlightType type;
+    Highlight_Data data;
 };
 
 struct Node_Highlight_String_Data {
@@ -27,12 +27,14 @@ highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
 }
 
 function void
-highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
-                          String_Const_u8 String, HighlightType type)
+highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list, String_Const_u8 String,
+                           HighlightType type, Buffer_ID buffer, i64 pos)
 {
     Highlight_String_Data highlight_data = {};
     highlight_data.string = String;
-    highlight_data.type = type;
+    highlight_data.data.type = type;
+    highlight_data.data.def_buffer = buffer;
+    highlight_data.data.def_pos = pos;
     highlight_string_list_push(arena, list, highlight_data);
 }
 
@@ -45,10 +47,19 @@ finalize_highlight_string_list(Application_Links *app, Arena *arena,
     Result.vals = push_array(arena, String_Const_u8, list->node_count);
     Result.count = list->node_count;
     i32 array_index = 0;
+
     for (Node_Highlight_String_Data *node = list->first; node != 0; node = node->next) {
-        if(jp_custom_highlight_lookup(app, node->data.string) == HighlightType_None) {
+        Highlight_Data table_entry;
+        // NOTE(jack): If the string is not already a key in the table;
+        if(!jp_custom_highlight_lookup(app, node->data.string, &table_entry)) {
             Result.vals[array_index] = push_string_copy(arena, node->data.string);
-            jp_insert_custom_highlight(app, Result.vals[array_index], node->data.type);
+
+            // NOTE(jack) Make a Data object from the temporarily allocated data
+            // Then add a copy of that to the buffer arena for long term storage
+            Data temp_highlight_data = make_data_struct(&node->data.data);
+            Data perm_highlight_data = push_data_copy(arena, temp_highlight_data);
+            jp_insert_custom_highlight(app, Result.vals[array_index], perm_highlight_data);
+
             ++array_index;
         } else {
             --Result.count;
@@ -117,7 +128,7 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
         {
             Token *token = token_it_read(&it);
 
-            String_Const_u8 token_string = push_buffer_range(app, scratch, buffer_id, Ii64(token));
+            String_Const_u8 token_string = push_token_lexeme(app, scratch, buffer_id, token);
             
             if (token->kind == TokenBaseKind_Preprocessor && token->sub_kind == TokenCppKind_PPDefine)
             {
@@ -127,14 +138,14 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     break;
                 }
                 Token *di_token = token_it_read(&it);
-                String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id, Ii64(di_token));
+                String_Const_u8 di_string = push_token_lexeme(app, scratch, buffer_id, di_token);
 
                 if (!token_it_inc_non_whitespace(&it)) {
                     DEBUG_MSG_LIT("#defined identifier was the last token\n");
                     break;
                 }
                 Token *dt_token = token_it_read(&it);
-                String_Const_u8 dt_string = push_buffer_range(app, scratch, buffer_id, Ii64(dt_token));
+                String_Const_u8 dt_string = push_token_lexeme(app, scratch, buffer_id, dt_token);
                 
                 String_Const_u8 di_dt_separator = push_buffer_range(app, scratch, buffer_id, 
                                                                     {di_token->pos + di_token->size , dt_token->pos});
@@ -144,12 +155,14 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     // NOTE(jack): If the defined to (dt) token is a keyword and is a type
                     if((dt_token->kind == TokenBaseKind_Keyword && jp_is_type_token(dt_token)))
                     {
-                        highlight_string_list_push(scratch, list, di_string, HighlightType_Type);
+                        highlight_string_list_push(scratch, list, di_string,
+                                                   HighlightType_Type, buffer_id, di_token->pos);
                     }
                     // NOTE(jack): If the dt_token (keyword) is not a type or it is a custom keyword
                     else if (dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token))
                     {
-                        highlight_string_list_push(scratch, list, di_string, HighlightType_Keyword);
+                        highlight_string_list_push(scratch, list, di_string,
+                                                   HighlightType_Keyword, buffer_id, di_token->pos);
                     }
                 } else {
                     // NOTE(jack): If there was a new line we need to decrement to not miss the next line.
@@ -193,8 +206,9 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
 
                         // NOTE(jack): If the token after 'struct' is an identifier it is a new typename
                         if (second_token->kind == TokenBaseKind_Identifier) {
-                            String_Const_u8 inner_struct_type = push_buffer_range(app, scratch, buffer_id, Ii64(second_token));
-                            highlight_string_list_push(scratch, list, inner_struct_type, HighlightType_Type);
+                            String_Const_u8 inner_struct_type = push_token_lexeme(app, scratch, buffer_id, second_token);
+                            highlight_string_list_push(scratch, list, inner_struct_type,
+                                                       HighlightType_Type, buffer_id, second_token->pos);
                         } else if (second_token->kind == TokenBaseKind_ScopeOpen) {
                             b32 result = token_it_dec_non_whitespace(&it);
                             // NOTE(jack): we have iterated forward to this point so shouldn't fail.
@@ -212,8 +226,9 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     if (!di_token) {
                         break;
                     }
-                    String_Const_u8 di_string = push_buffer_range(app, scratch, buffer_id, Ii64(di_token));
-                    highlight_string_list_push(scratch, list, di_string, HighlightType_Type);
+                    String_Const_u8 di_string = push_token_lexeme(app, scratch, buffer_id, di_token);
+                    highlight_string_list_push(scratch, list, di_string,
+                                               HighlightType_Type, buffer_id, di_token->pos);
                 } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
                            token->sub_kind == TokenCppKind_Class )
                 {
@@ -225,8 +240,9 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     }
                     Token *next_token = token_it_read(&it);
                     if(next_token->kind == TokenBaseKind_Identifier) {
-                        String_Const_u8 struct_name = push_buffer_range(app, scratch, buffer_id, Ii64(next_token));
-                        highlight_string_list_push(scratch, list, struct_name, HighlightType_Type);
+                        String_Const_u8 struct_name = push_token_lexeme(app, scratch, buffer_id, next_token);
+                        highlight_string_list_push(scratch, list, struct_name,
+                                                   HighlightType_Type, buffer_id, next_token->pos);
                     }
                 }
                 // TODO(jack): highlight enum class types.
@@ -277,7 +293,8 @@ jp_parse_data_desk_types(Application_Links *app, Arena *scratch,
             // NOTE(jack): Temporary scratchpad memory arena that gets free'd at scope close
             Token *token = token_it_read(&it);
             if (token->kind == TokenBaseKind_Identifier)
-            {
+            {   
+                Token *defined_token = token;
                 String_Const_u8 token_string = push_token_lexeme(app, scratch, buffer_id, token);
                 // NOTE(jack): Iterate to the next token;
                 if(!token_it_inc_non_whitespace(&it)) {
@@ -303,7 +320,8 @@ jp_parse_data_desk_types(Application_Links *app, Arena *scratch,
                          token->sub_kind == TokenCppKind_Union))
                     {
                         // NOTE(jack): If it was a type definition, add it as a custom type.
-                        highlight_string_list_push(scratch, list, token_string, HighlightType_Type);
+                        highlight_string_list_push(scratch, list, token_string,
+                                                   HighlightType_Type, buffer_id, defined_token->pos);
                     }
                     else 
                     {
@@ -382,9 +400,11 @@ jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch
                         Code_Index_Note* this_note = file->note_array.ptrs[i];
                         if (string_match(this_note->text, string)) {
                             if (this_note->note_kind == CodeIndexNote_Function) {
-                                highlight_string_list_push(scratch, list, string, HighlightType_Function);
+                                highlight_string_list_push(scratch, list, string,
+                                                           HighlightType_Function, buffer_id, token->pos);
                             } else if (this_note->note_kind == CodeIndexNote_Macro) {
-                                highlight_string_list_push(scratch, list, string, HighlightType_Macro);
+                                highlight_string_list_push(scratch, list, string,
+                                                           HighlightType_Macro, buffer_id, token->pos);
                             }
                             // NOTE(jack): We have found the note for this token,
                             // so we can break out of the note loop.

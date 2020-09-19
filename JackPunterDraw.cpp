@@ -37,24 +37,25 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
         }break;
         case TokenBaseKind_Identifier:
         {
-            HighlightType type = jp_custom_highlight_lookup(app, lexeme);
-            switch (type)
-            {
-            case HighlightType_Keyword:
-                color = finalize_color(defcolor_keyword, 0);
+            Highlight_Data lookup_data;
+            if (jp_custom_highlight_lookup(app, lexeme, &lookup_data)) {
+                switch (lookup_data.type)
+                {
+                case HighlightType_Keyword:
+                    color = finalize_color(defcolor_keyword, 0);
+                    break;
+                case HighlightType_Type:
+                    color = finalize_color(defcolor_keyword, 1);
+                    break;
+                case HighlightType_Function:
+                    color = finalize_color(defcolor_keyword, 2);
+                    break;
+                
+                case HighlightType_None:
+                default:
                 break;
-            case HighlightType_Type:
-                color = finalize_color(defcolor_keyword, 1);
-                break;
-            case HighlightType_Function:
-                color = finalize_color(defcolor_keyword, 2);
-                break;
-            
-            case HighlightType_None:
-            default:
-            break;
+                }
             }
-
         }break;
     }
     // specifics override generals
