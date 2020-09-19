@@ -17,6 +17,7 @@ global const i32 custom_highlight_base_size = 32;
 
 enum HighlightType : u64 {
     HighlightType_Function,
+    HighlightType_Macro,
     HighlightType_Type,
     HighlightType_Keyword,
     HighlightType_None,

@@ -356,7 +356,7 @@ haven't spent too long looking into the Code Index Notes.
 // This will currently attempt to push a function when it is declared, and
 // when it is called, resulting in a lot of string comparisons].
 function void
-jp_fill_buffer_data_with_functions(Application_Links *app, Arena *scratch,
+jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch,
                                    List_Highlight_String_Data *list, Buffer_ID buffer_id)
 {
     // NOTE(jack): Uses the Code Index to identify function indentifiers,
@@ -382,10 +382,9 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Arena *scratch,
                         Code_Index_Note* this_note = file->note_array.ptrs[i];
                         if (string_match(this_note->text, string)) {
                             if (this_note->note_kind == CodeIndexNote_Function) {
-                                Highlight_String_Data highlight_data = {};
-                                highlight_data.string = string;
-                                highlight_data.type = HighlightType_Function;
-                                highlight_string_list_push(scratch, list, highlight_data);
+                                highlight_string_list_push(scratch, list, string, HighlightType_Function);
+                            } else if (this_note->note_kind == CodeIndexNote_Macro) {
+                                highlight_string_list_push(scratch, list, string, HighlightType_Macro);
                             }
                             // NOTE(jack): We have found the note for this token,
                             // so we can break out of the note loop.
@@ -405,6 +404,7 @@ jp_fill_buffer_data_with_functions(Application_Links *app, Arena *scratch,
 function void
 jp_parse_custom_highlights(Application_Links *app, Buffer_ID buffer_id)
 {
+    ProfileScope(app, "Jp Parse Custom Highlights");
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
     jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
                                                      jp_buffer_data_t);
@@ -428,7 +428,7 @@ jp_parse_custom_highlights(Application_Links *app, Buffer_ID buffer_id)
         jp_parse_data_desk_types(app, scratch, &list, buffer_id);
     } else {
         jp_parse_cpp_keywords_types(app, scratch, &list, buffer_id);
-        jp_fill_buffer_data_with_functions(app, scratch, &list, buffer_id );
+        jp_fill_buffer_data_with_functions_macros(app, scratch, &list, buffer_id );
     }
 
     // NOTE(jack): Fill buffer's list of custom highlights
