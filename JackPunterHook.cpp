@@ -360,6 +360,10 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
     // NOTE(jack): Call my copy of the default renderer which does custom highlighting
     jp_render_buffer(app, view_id, face_id, buffer, text_layout_id, region);
     
+    if (is_active_view && GlobalShowDefinitionPeeks) {
+        jp_draw_definition_peek(app, text_layout_id, face_id, view_id, buffer);
+    }
+
     text_layout_free(app, text_layout_id);
     draw_set_clip(app, prev_clip);
 }

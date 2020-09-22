@@ -4,7 +4,6 @@
 CUSTOM_UI_COMMAND_SIG(jp_macro_toggle_recording)
 CUSTOM_DOC("Toggle Recording Keyboard Macro")
 {
-    DEBUG_MSG_LIT("jp_macro_toggle_recording");
     if (GlobalIsRecordingMacro) {
         keyboard_macro_finish_recording(app);
         GlobalIsRecordingMacro = false;
@@ -14,10 +13,16 @@ CUSTOM_DOC("Toggle Recording Keyboard Macro")
     }
 }
 
+
+CUSTOM_UI_COMMAND_SIG(jp_toggle_definition_peek)
+CUSTOM_DOC("Toggle Show Definition Peeks")
+{
+    GlobalShowDefinitionPeeks = !GlobalShowDefinitionPeeks;
+}
+
 CUSTOM_UI_COMMAND_SIG(jp_switch_buffer_other)
 CUSTOM_DOC("Switch to an open buffer in the other panel")
 {
-    DEBUG_MSG_LIT("jp_switch_buffer_other");
     change_active_panel(app);
     View_ID vid = get_active_view(app, Access_Always);
     view_enqueue_command_function(app, vid, interactive_switch_buffer);

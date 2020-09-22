@@ -13,14 +13,31 @@
 #define DEBUG_MSG_STR(str)
 #endif
 
+
 global const i32 custom_highlight_base_size = 32;
+global bool GlobalShowDefinitionPeeks = true;
+global bool GlobalIsRecordingMacro = false;
+
+global i32 type_token_kinds[] = {
+    TokenCppKind_Void,
+    TokenCppKind_Bool,
+    TokenCppKind_Char,
+    TokenCppKind_Int,
+    TokenCppKind_Float,
+    TokenCppKind_Double,
+    TokenCppKind_Long,-
+    TokenCppKind_Short,
+    TokenCppKind_Unsigned,
+    TokenCppKind_Signed,
+    TokenCppKind_Const,
+    TokenCppKind_Volatile
+};
 
 enum HighlightType : u64 {
     HighlightType_Function,
     HighlightType_Macro,
     HighlightType_Type,
     HighlightType_Keyword,
-    HighlightType_None,
 };
 
 struct Highlight_Data {
@@ -45,25 +62,9 @@ struct jp_buffer_data_t {
 
     b32 parse_contents = false;
 };
-
 CUSTOM_ID(attachment, jp_buffer_attachment);
 CUSTOM_ID(attachment, jp_app_attachment);
 CUSTOM_ID(attachment, buffer_parse_keywords_types_task);
-
-global i32 type_token_kinds[] = {
-    TokenCppKind_Void,
-    TokenCppKind_Bool,
-    TokenCppKind_Char,
-    TokenCppKind_Int,
-    TokenCppKind_Float,
-    TokenCppKind_Double,
-    TokenCppKind_Long,-
-    TokenCppKind_Short,
-    TokenCppKind_Unsigned,
-    TokenCppKind_Signed,
-    TokenCppKind_Const,
-    TokenCppKind_Volatile
-};
 
 function b32
 jp_is_type_token(Token* token){
@@ -111,6 +112,15 @@ jp_custom_highlight_lookup(Application_Links *app, String_Const_u8 string, Highl
 }
 
 function b32
+jp_custom_highlight_token_lookup(Application_Links *app, Token *token, Buffer_ID buffer, Highlight_Data *out_val)
+{
+    ProfileScope(app, "JP Custom Highlight Lookup [Token]");
+    Scratch_Block scratch(app);
+    String_Const_u8 token_string = push_token_lexeme(app, scratch, buffer, token);
+    return jp_custom_highlight_lookup(app, token_string, out_val);
+}
+
+function b32
 jp_erase_custom_highlight(Application_Links *app, String_Const_u8 string)
 {
     ProfileScope(app, "JP Erase Custom Highlight");
@@ -121,8 +131,6 @@ jp_erase_custom_highlight(Application_Links *app, String_Const_u8 string)
     key.size = string.size;
     return table_erase(&app_data->custom_highlight_table, key);
 }
-
-global bool GlobalIsRecordingMacro = false;
 
 #include "JackPunterParsing.cpp"
 // NOTE(jack): Custom Command Definitions
@@ -170,7 +178,7 @@ custom_layer_init(Application_Links *app)
 
     Highlight_Data not_defined_keyword = {HighlightType_Keyword, 0, 0};
     Data nd_keyword_data = push_data_copy(&app_data->global_highlights_arena,
-                                              make_data_struct(&not_defined_keyword));
+                                          make_data_struct(&not_defined_keyword));
     // CUSTOM TYPE HIGHLIGHTS
     jp_insert_custom_highlight(
         app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint8_t")),

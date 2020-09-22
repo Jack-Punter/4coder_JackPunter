@@ -21,7 +21,7 @@ defcolor_int_constant = defcolor_str_constant;
 defcolor_float_constant = defcolor_str_constant;
 defcolor_bool_constant = defcolor_str_constant;
 defcolor_include = defcolor_str_constant;
-defcolor_preproc = 0xFFC060C0;
+defcolor_preproc = {0xFFC060C0, 0xFFA88DA0};
 defcolor_special_character = 0xFFFF0000;
 defcolor_ghost_character = 0xFF4E5E46;
 

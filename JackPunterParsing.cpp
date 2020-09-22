@@ -19,7 +19,8 @@ struct List_Highlight_String_Data {
 
 function void
 highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
-                          Highlight_String_Data data) {
+                          Highlight_String_Data data)
+{
     Node_Highlight_String_Data *node = push_array(arena, Node_Highlight_String_Data, 1);
     sll_queue_push(list->first, list->last, node);
     node->data = data;
@@ -54,7 +55,7 @@ finalize_highlight_string_list(Application_Links *app, Arena *arena,
         if(!jp_custom_highlight_lookup(app, node->data.string, &table_entry)) {
             Result.vals[array_index] = push_string_copy(arena, node->data.string);
 
-            // NOTE(jack) Make a Data object from the temporarily allocated data
+            // NOTE(jack): Make a Data object from the temporarily allocated data
             // Then add a copy of that to the buffer arena for long term storage
             Data temp_highlight_data = make_data_struct(&node->data.data);
             Data perm_highlight_data = push_data_copy(arena, temp_highlight_data);
@@ -62,6 +63,7 @@ finalize_highlight_string_list(Application_Links *app, Arena *arena,
 
             ++array_index;
         } else {
+            // TODO(jack): store something to indicate that there are overloads?
             --Result.count;
         }
     }
