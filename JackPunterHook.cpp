@@ -181,8 +181,8 @@ CUSTOM_DOC("Jack Punter begin buffer")
 
 function void
 jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
-                      Buffer_ID buffer, Text_Layout_ID text_layout_id,
-                      Rect_f32 rect) 
+                 Buffer_ID buffer, Text_Layout_ID text_layout_id,
+                 Rect_f32 rect) 
 {
     ProfileScope(app, "JP render buffer");
 

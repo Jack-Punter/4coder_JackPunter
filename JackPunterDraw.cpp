@@ -123,22 +123,41 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
     Buffer_Point def_buffer_point = {def_line, 0};
     Token_Array def_buffer_tokens = get_token_array_from_buffer(app, highlight_data.def_buffer);
 
-
     auto draw_macro_definition = [&]() {
         Rect_f32 draw_rect = popup_anchor;
-        draw_rect.p0.y -= (metrics.line_height);
-        draw_rect.p1.y -= (metrics.line_height);
-        // NOTE(jack): the - 1 on the range is to remove the newline character on the end.
-        draw_rect.p1.x += metrics.normal_advance * (def_line_range.end - def_line_range.start - 1);
+        f32 single_line_endX = draw_rect.x1 + metrics.normal_advance *
+                               (def_line_range.end - def_line_range.start - 1);
+        if(single_line_endX <=  buffer_region.x1) {
+            draw_rect.x1 = single_line_endX;
+            draw_rect.y0 -= metrics.line_height;
+            draw_rect.y1 -= metrics.line_height;
+        } else {
+            draw_rect.x1 = buffer_region.x1;
+            draw_rect.y0 -= metrics.line_height;
+            draw_rect.y1 -= metrics.line_height;
 
-        Rect_f32 draw_clip_rect = rect_intersect(draw_rect, buffer_region);
+            Text_Layout_ID tmp_text_layout_id = text_layout_create(
+                app, highlight_data.def_buffer, draw_rect, def_buffer_point
+            );
+            Rect_f32 start_rect = text_layout_character_on_screen(app, tmp_text_layout_id,
+                                                                  def_line_range.start);
+            Rect_f32 end_rect = text_layout_character_on_screen(app, tmp_text_layout_id,
+                                                                def_line_range.end);
 
-        draw_set_clip(app, draw_clip_rect);
-
+            i32 used_lines = (int)((end_rect.y0 - start_rect.y0) / metrics.line_height);
+            draw_rect.y0 -= (f32)(used_lines) * metrics.line_height;
+            text_layout_free(app, tmp_text_layout_id);
+        }
+        
+        // NOTE(jack): Actually draw the text to the screen
         Text_Layout_ID def_text_layout_id = text_layout_create(
-            app, highlight_data.def_buffer, draw_rect, def_buffer_point);
-        draw_rectangle(app, draw_clip_rect, 5.0f, finalize_color(defcolor_back, 0));
-        draw_rectangle_outline(app, draw_clip_rect, 5.0f,
+            app, highlight_data.def_buffer, draw_rect, def_buffer_point
+        );
+
+        draw_set_clip(app, draw_rect);
+        
+        draw_rectangle(app, draw_rect, 5.0f, finalize_color(defcolor_back, 0));
+        draw_rectangle_outline(app, draw_rect, 5.0f,
                                2.0f, finalize_color(defcolor_highlight, 0));
 
         if (def_buffer_tokens.tokens != 0) {
@@ -146,12 +165,12 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
                                      &def_buffer_tokens, highlight_data.def_buffer);
         } else {
             paint_text_color_fcolor(app, def_text_layout_id, def_line_range,
-                                    fcolor_id(defcolor_highlight_junk));
+                                    fcolor_id(defcolor_text_default));
         }
 
         draw_text_layout_default(app, def_text_layout_id);
         draw_set_clip(app, buffer_region);
-        text_layout_free(app, text_layout_id);
+        text_layout_free(app, def_text_layout_id);
     };
     // If the definition is in the current buffer (and visible) we just draw an outline around it
     if (highlight_data.def_buffer == buffer &&
@@ -191,19 +210,39 @@ jp_draw_definition_peek(Application_Links *app, Text_Layout_ID text_layout_id,
         i64 cursor_pos = view_get_cursor_pos(app, vid);
         Token_Iterator_Array it = token_iterator_pos(0, &token_array, cursor_pos);
         Token *cursor_token = token_it_read(&it);
-
+        
+        b32 try_previous = false;
+        Token *prev_token = 0;
+        if (!token_it_dec_non_whitespace(&it)) {
+            // Couldnt go back a token from the cursor
+        } else {
+            prev_token = token_it_read(&it);
+            try_previous = true; 
+        }
+        
+        Token *popup_token = 0;
+        Rect_f32 popup_anchor_rect = {};
         Highlight_Data lookup_data;
         if (jp_custom_highlight_token_lookup(app, cursor_token, buffer, &lookup_data)) {
-            Rect_f32 cursor_token_start_rect = text_layout_character_on_screen(
+            // NOTE(jack): the anchor rect is the rectanle of the the character below the
+            // bottom-left corner of the popup
+            popup_anchor_rect = text_layout_character_on_screen(
                 app, text_layout_id, cursor_token->pos
             );
-            if (lookup_data.def_pos != cursor_token->pos) {
-                switch (lookup_data.type) {
-                    case HighlightType_Macro: {
-                        jp_draw_macro_definition(app, text_layout_id, face_id, vid, buffer,
-                                                 lookup_data, cursor_token_start_rect);
-                    } break;
-                }
+            popup_token = cursor_token;
+        } else if (try_previous && jp_custom_highlight_token_lookup(app, prev_token, buffer, &lookup_data)) {
+            popup_anchor_rect = text_layout_character_on_screen(
+                app, text_layout_id, prev_token->pos
+            );
+            popup_token = prev_token;
+        }
+
+        if (popup_token && lookup_data.def_pos != popup_token->pos) {
+            switch (lookup_data.type) {
+                case HighlightType_Macro: {
+                    jp_draw_macro_definition(app, text_layout_id, face_id, vid, buffer,
+                                                lookup_data, popup_anchor_rect);
+                } break;
             }
         }
     }
