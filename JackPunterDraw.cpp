@@ -127,28 +127,14 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
         Rect_f32 draw_rect = popup_anchor;
         f32 single_line_endX = draw_rect.x1 + metrics.normal_advance *
                                (def_line_range.end - def_line_range.start - 1);
-        if(single_line_endX <=  buffer_region.x1) {
-            draw_rect.x1 = single_line_endX;
-            draw_rect.y0 -= metrics.line_height;
-            draw_rect.y1 -= metrics.line_height;
-        } else {
-            draw_rect.x1 = buffer_region.x1;
-            draw_rect.y0 -= metrics.line_height;
-            draw_rect.y1 -= metrics.line_height;
 
-            Text_Layout_ID tmp_text_layout_id = text_layout_create(
-                app, highlight_data.def_buffer, draw_rect, def_buffer_point
-            );
-            Rect_f32 start_rect = text_layout_character_on_screen(app, tmp_text_layout_id,
-                                                                  def_line_range.start);
-            Rect_f32 end_rect = text_layout_character_on_screen(app, tmp_text_layout_id,
-                                                                def_line_range.end);
+        draw_rect.x1 = Min(buffer_region.x1, single_line_endX);
+        draw_rect.y1 -= metrics.line_height;
+        // NOTE(jack): buffer_line_y_difference return top(A) - top(B) in pixels
+        f32 y_difference = buffer_line_y_difference(app, buffer, rect_width(draw_rect), face_id,
+                                                    /*A*/ def_line, /*B*/ def_line + 1);
+        draw_rect.y0 += y_difference;
 
-            i32 used_lines = (int)((end_rect.y0 - start_rect.y0) / metrics.line_height);
-            draw_rect.y0 -= (f32)(used_lines) * metrics.line_height;
-            text_layout_free(app, tmp_text_layout_id);
-        }
-        
         // NOTE(jack): Actually draw the text to the screen
         Text_Layout_ID def_text_layout_id = text_layout_create(
             app, highlight_data.def_buffer, draw_rect, def_buffer_point
