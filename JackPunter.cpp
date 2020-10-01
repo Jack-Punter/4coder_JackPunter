@@ -46,6 +46,11 @@ struct Highlight_Data {
     i64 def_pos;
 };
 
+bool operator==(const Highlight_Data& lhs, const Highlight_Data& rhs) {
+    return (lhs.def_buffer == rhs.def_buffer &&
+            lhs.def_pos == rhs.def_pos);
+}
+
 struct jp_app_data_t {
     // NOTE(jack): This will store the custom highlight information for all buffers
     Base_Allocator* table_allocator;

@@ -361,7 +361,7 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
     jp_render_buffer(app, view_id, face_id, buffer, text_layout_id, region);
     
     if (is_active_view && GlobalShowDefinitionPeeks) {
-        jp_draw_definition_peek(app, text_layout_id, face_id, view_id, buffer);
+        jp_draw_definition_helpers(app, text_layout_id, face_id, view_id, buffer);
     }
 
     text_layout_free(app, text_layout_id);

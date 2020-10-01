@@ -403,6 +403,13 @@ jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch
                         Code_Index_Note* this_note = file->note_array.ptrs[i];
                         if (string_match(this_note->text, string)) {
                             if (this_note->note_kind == CodeIndexNote_Function) {
+                                /* TODO(jack): in the following case the definition of PushSize_ is the first line:
+                                    #define PushStruct(Arena, type) (type *)PushSize_(Arena, sizeof(type))
+                                    #define PushArray(Arena, Count, type) (type *)PushSize_(Arena, (Count) * sizeof(type))
+                                    void *
+                                    PushSize_(memory_arena *Arena, memory_index Size)
+                                    { ... }
+                                */
                                 highlight_string_list_push(scratch, list, string,
                                                            HighlightType_Function, buffer_id, token->pos);
                             } else if ((prev_token && prev_token->sub_kind == TokenCppKind_PPDefine) &&

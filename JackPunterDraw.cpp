@@ -186,48 +186,187 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
 }
 
 function void
-jp_draw_definition_peek(Application_Links *app, Text_Layout_ID text_layout_id,
-                        Face_ID face_id, View_ID vid, Buffer_ID buffer)
+jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
+                        Face_ID face_id, View_ID vid, Buffer_ID buffer,
+                        Highlight_Data highlight_data, i32 cursor_param_index)
+{
+    Token_Array def_buffer_tokens = get_token_array_from_buffer(app, highlight_data.def_buffer);
+    
+    if (def_buffer_tokens.tokens != 0)
+    {
+        Scratch_Block scratch(app);
+        
+        i64 cursor_pos = view_get_cursor_pos(app, vid);
+        Token_Iterator_Array it = token_iterator_pos(0, &def_buffer_tokens, cursor_pos);
+
+        List_String_Const_u8 function_parameter_list = {};
+        it = token_iterator_pos(0, &def_buffer_tokens, highlight_data.def_pos);
+        // NOTE(jack): loop from the definition token forwards
+        {
+            b32 found_close_paren = false;
+            i32 paren_opens = 0;
+            i64 transient_single_param_start = {0};
+            while (!found_close_paren)
+            {
+                if (!token_it_inc_non_whitespace(&it)) {
+                    break;
+                }
+                Token *token = token_it_read(&it);
+
+                if (token->kind == TokenBaseKind_ParentheticalOpen) {
+                    if(paren_opens == 0) {
+                        transient_single_param_start = token->pos + 1;
+                    }
+                    ++paren_opens;
+                } else if (token->kind == TokenBaseKind_ParentheticalClose) {
+                    // NOTE(jack): If we reach the closing paren of the function
+                    if (--paren_opens == 0) {
+                        String_Const_u8 param_string =
+                            push_buffer_range(app, scratch, buffer,
+                                             {transient_single_param_start, token->pos});
+                        String_Const_u8 condensed_param_string = string_condense_whitespace(scratch, param_string);
+                        string_list_push(scratch, &function_parameter_list, condensed_param_string);
+
+                        found_close_paren = true;
+                    }
+                } else if(token->sub_kind == TokenCppKind_Comma) {
+                    String_Const_u8 param_string =
+                        push_buffer_range(app, scratch, buffer,
+                                          {transient_single_param_start, token->pos});
+                    String_Const_u8 condensed_param_string = string_condense_whitespace(scratch, param_string);
+                    string_list_push(scratch, &function_parameter_list, condensed_param_string);
+
+                    transient_single_param_start = token->pos + 1;
+                }
+            }
+        }
+        if (cursor_param_index <= function_parameter_list.node_count) {
+            i64 line_after_cursor = 1 + get_line_number_from_pos(app, buffer, cursor_pos);
+            i64 line_after_cursor_start = get_line_pos_range(app, buffer, line_after_cursor).start;
+            String_Const_u8 after_cursor = push_buffer_range(app, scratch, buffer,
+                                                            {cursor_pos, line_after_cursor_start});
+            String_Const_u8 after_cursor_condensed = string_condense_whitespace(scratch, after_cursor);
+            // NOTE(jack): if it is only whitespace, between cursor and newline
+            if(after_cursor_condensed.size == 0) {
+                Face_Metrics metrics = get_face_metrics(app, face_id);
+                List_String_Const_u8 draw_string_list = function_parameter_list;
+                i32 parameter_index = 0;
+                for (Node_String_Const_u8 *node = function_parameter_list.first;
+                     node != 0; node = node->next)
+                {
+                    if(parameter_index == cursor_param_index) {
+                        draw_string_list.first = node;
+                        break;
+                    } else {
+                        draw_string_list.total_size -= node->string.size;
+                        --draw_string_list.node_count;
+                    }
+                    ++parameter_index;
+                }
+
+                String_Const_u8 peek_string = 
+                    string_list_flatten(scratch, draw_string_list, SCu8(", "),
+                                        StringSeparator_NoFlags, StringFill_NoTerminate);
+                Vec2_f32 draw_pos =
+                    text_layout_character_on_screen(app, text_layout_id, cursor_pos).p0;
+                draw_pos.x += metrics.normal_advance;
+                
+                ARGB_Color peek_col = finalize_color(defcolor_text_default, 0);
+                peek_col &= 0x00FFFFFF;
+                peek_col |= 0x80000000;
+                draw_pos = draw_string(app, face_id, peek_string, draw_pos, peek_col);
+                draw_string(app, face_id, SCu8(");"), draw_pos, peek_col);
+            }
+        }
+    }
+}
+
+function void
+jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
+                           Face_ID face_id, View_ID vid, Buffer_ID buffer)
 {
     ProfileScope(app, "JP Draw Macro definition");
     Scratch_Block scratch(app);
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
-    if(token_array.tokens != 0) {
-        i64 cursor_pos = view_get_cursor_pos(app, vid);
-        Token_Iterator_Array it = token_iterator_pos(0, &token_array, cursor_pos);
-        Token *cursor_token = token_it_read(&it);
-        
-        b32 try_previous = false;
-        Token *prev_token = 0;
-        if (!token_it_dec_non_whitespace(&it)) {
-            // Couldnt go back a token from the cursor
-        } else {
-            prev_token = token_it_read(&it);
-            try_previous = true; 
-        }
-        
-        Token *popup_token = 0;
-        Rect_f32 popup_anchor_rect = {};
-        Highlight_Data lookup_data;
-        if (jp_custom_highlight_token_lookup(app, cursor_token, buffer, &lookup_data)) {
-            // NOTE(jack): the anchor rect is the rectanle of the the character below the
-            // bottom-left corner of the popup
-            popup_anchor_rect = text_layout_character_on_screen(
-                app, text_layout_id, cursor_token->pos
-            );
-            popup_token = cursor_token;
-        } else if (try_previous && jp_custom_highlight_token_lookup(app, prev_token, buffer, &lookup_data)) {
-            popup_anchor_rect = text_layout_character_on_screen(
-                app, text_layout_id, prev_token->pos
-            );
-            popup_token = prev_token;
-        }
+    if(token_array.tokens != 0)
+    {
+        bool found_peek_target = false;
+        i32 cursor_parameter_index = 0;
+        Highlight_Data lookup_data = {};
+        Token *peek_target;
 
-        if (popup_token && lookup_data.def_pos != popup_token->pos) {
+        {
+            i64 cursor_pos = view_get_cursor_pos(app, vid);
+            Token_Iterator_Array it = token_iterator_pos(0, &token_array, cursor_pos);
+            peek_target = token_it_read(&it);
+            i32 open_count = 0;
+            i32 close_count = 0;
+
+            while (!found_peek_target)
+            {
+                peek_target = token_it_read(&it);
+                // If the token has highlight data, and the cursor is inside its parameters prenthesis
+                if (jp_custom_highlight_token_lookup(app, peek_target, buffer, &lookup_data))
+                {
+                    auto is_macro_peek_target = [](HighlightType type, i32 open_count, i32 close_count) -> bool {
+                        // If the token is a macro
+                        // and the cursor is on the token: (close_count == 0 && open_count == 0)
+                        // or within the parameters brackets: (open_count > close_count)
+                        // then the it's a valid peek token
+                        return (type == HighlightType_Macro &&
+                                ((close_count == 0 && open_count == 0) ||
+                                 (open_count > close_count)));
+                    };
+
+                    auto is_function_peek_target = [](HighlightType type, i32 open_count, i32 close_count) -> bool {
+                        // If the token is a fucntion
+                        // and the cursor is within the parameters brackets: (open_count > close_count)
+                        return (type == HighlightType_Function && open_count > close_count);
+                    };
+
+                    found_peek_target = is_macro_peek_target(lookup_data.type,open_count, close_count) ||
+                                        is_function_peek_target(lookup_data.type,open_count, close_count);
+                }
+                else
+                {
+                    // NOTE(jack): These kinds/sub_kinds are the break condition so that we don't
+                    // iterate back to the beginning of the buffer
+                    if (peek_target->kind == TokenBaseKind_Preprocessor ||
+                        peek_target->kind == TokenBaseKind_ScopeClose ||
+                        peek_target->sub_kind == TokenCppKind_Semicolon)
+                    {
+                        break;
+                    }
+
+                    if (peek_target->kind == TokenBaseKind_ParentheticalClose) {
+                        close_count++;
+                    } else if (peek_target->kind == TokenBaseKind_ParentheticalOpen) {
+                        open_count++;
+                    } else if (peek_target->sub_kind == TokenCppKind_Comma) {
+                        cursor_parameter_index++;
+                    }
+                }
+                if(!token_it_dec_non_whitespace(&it)) {
+                    break;
+                }
+            }
+        }
+        // If a peek target has been found and it isn't the definition
+        if (found_peek_target && 
+            !(lookup_data.def_buffer == buffer && lookup_data.def_pos == peek_target->pos))
+        {
+            Rect_f32 popup_anchor_rect = text_layout_character_on_screen(
+                app, text_layout_id, peek_target->pos
+            );
+
             switch (lookup_data.type) {
+                case HighlightType_Function: {
+                    jp_draw_function_params(app, text_layout_id, face_id, vid, buffer,
+                                            lookup_data, cursor_parameter_index);
+                } break;
                 case HighlightType_Macro: {
                     jp_draw_macro_definition(app, text_layout_id, face_id, vid, buffer,
-                                                lookup_data, popup_anchor_rect);
+                                             lookup_data, popup_anchor_rect);
                 } break;
             }
         }
