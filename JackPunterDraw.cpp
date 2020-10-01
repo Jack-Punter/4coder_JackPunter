@@ -195,7 +195,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
     if (def_buffer_tokens.tokens != 0)
     {
         Scratch_Block scratch(app);
-        
+
         i64 cursor_pos = view_get_cursor_pos(app, vid);
         Token_Iterator_Array it = token_iterator_pos(0, &def_buffer_tokens, cursor_pos);
 
@@ -248,32 +248,48 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
             String_Const_u8 after_cursor_condensed = string_condense_whitespace(scratch, after_cursor);
             // NOTE(jack): if it is only whitespace, between cursor and newline
             if(after_cursor_condensed.size == 0) {
-                Face_Metrics metrics = get_face_metrics(app, face_id);
                 List_String_Const_u8 draw_string_list = function_parameter_list;
-                i32 parameter_index = 0;
-                for (Node_String_Const_u8 *node = function_parameter_list.first;
-                     node != 0; node = node->next)
+                String_Const_u8 first_peek_param = {};
                 {
-                    if(parameter_index == cursor_param_index) {
-                        draw_string_list.first = node;
-                        break;
-                    } else {
-                        draw_string_list.total_size -= node->string.size;
-                        --draw_string_list.node_count;
-                    }
-                    ++parameter_index;
-                }
+                i32 parameter_index = 0;
+                    for (Node_String_Const_u8 *node = function_parameter_list.first;
+                        node != 0; node = node->next)
+                    {
+                        if(parameter_index == cursor_param_index) {
+                            first_peek_param = node->string;
 
-                String_Const_u8 peek_string = 
-                    string_list_flatten(scratch, draw_string_list, SCu8(", "),
-                                        StringSeparator_NoFlags, StringFill_NoTerminate);
-                Vec2_f32 draw_pos =
-                    text_layout_character_on_screen(app, text_layout_id, cursor_pos).p0;
-                draw_pos.x += metrics.normal_advance;
+                            draw_string_list.first = node->next;
+                            draw_string_list.total_size -= node->string.size;
+                            --draw_string_list.node_count;
+                            break;
+                        } else {
+                            draw_string_list.total_size -= node->string.size;
+                            --draw_string_list.node_count;
+                        }
+                        ++parameter_index;
+                    }
+                }
+                String_Const_u8 peek_string = {};
+                if (draw_string_list.node_count > 0) {
+                    peek_string = string_list_flatten(scratch, draw_string_list, SCu8(", "),
+                                        StringSeparator_BeforeFirst, StringFill_NoTerminate);
+                }
                 
+                Face_Metrics metrics = get_face_metrics(app, face_id);
+                Vec2_f32 draw_pos = text_layout_character_on_screen(app, text_layout_id, cursor_pos).p0;
+                draw_pos.x += metrics.normal_advance;
+
                 ARGB_Color peek_col = finalize_color(defcolor_text_default, 0);
-                peek_col &= 0x00FFFFFF;
-                peek_col |= 0x80000000;
+                auto set_color_alpha = [](ARGB_Color col, u8 alpha) -> ARGB_Color {
+                    ARGB_Color Result = col;
+                    Result &= 0x00FFFFFF;
+                    Result |= alpha << 24;
+                    return Result;
+                };
+
+                peek_col = set_color_alpha(peek_col, 0xC0);
+                draw_pos = draw_string(app, face_id, first_peek_param, draw_pos, peek_col);
+                peek_col = set_color_alpha(peek_col, 0x80);
                 draw_pos = draw_string(app, face_id, peek_string, draw_pos, peek_col);
                 draw_string(app, face_id, SCu8(");"), draw_pos, peek_col);
             }
