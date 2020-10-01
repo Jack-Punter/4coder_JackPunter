@@ -386,6 +386,7 @@ jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch
     if (token_array.tokens != 0)
     {
         Token_Iterator_Array it = token_iterator_index(0, &token_array, 0);
+        Token *prev_token = 0;
         for (;;)
         {
             Token *token = token_it_read(&it);
@@ -404,7 +405,8 @@ jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch
                             if (this_note->note_kind == CodeIndexNote_Function) {
                                 highlight_string_list_push(scratch, list, string,
                                                            HighlightType_Function, buffer_id, token->pos);
-                            } else if (this_note->note_kind == CodeIndexNote_Macro) {
+                            } else if ((prev_token && prev_token->sub_kind == TokenCppKind_PPDefine) &&
+                                        this_note->note_kind == CodeIndexNote_Macro) {
                                 highlight_string_list_push(scratch, list, string,
                                                            HighlightType_Macro, buffer_id, token->pos);
                             }
@@ -419,6 +421,7 @@ jp_fill_buffer_data_with_functions_macros(Application_Links *app, Arena *scratch
             if (!token_it_inc_non_whitespace(&it)) {
                 break;
             }
+            prev_token = token;
         }
     }
 }
