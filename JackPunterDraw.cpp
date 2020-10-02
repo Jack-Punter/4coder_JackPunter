@@ -184,6 +184,13 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
         draw_macro_definition();
     }
 }
+ARGB_Color set_color_alpha(ARGB_Color col, u8 alpha)
+{
+    ARGB_Color Result = col;
+    Result &= 0x00FFFFFF;
+    Result |= alpha << 24;
+    return Result;
+}
 
 function void
 jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
@@ -240,6 +247,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                 }
             }
         }
+    
         if (cursor_param_index <= function_parameter_list.node_count) {
             i64 line_after_cursor = 1 + get_line_number_from_pos(app, buffer, cursor_pos);
             i64 line_after_cursor_start = get_line_pos_range(app, buffer, line_after_cursor).start;
@@ -280,12 +288,6 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                 draw_pos.x += metrics.normal_advance;
 
                 ARGB_Color peek_col = finalize_color(defcolor_text_default, 0);
-                auto set_color_alpha = [](ARGB_Color col, u8 alpha) -> ARGB_Color {
-                    ARGB_Color Result = col;
-                    Result &= 0x00FFFFFF;
-                    Result |= alpha << 24;
-                    return Result;
-                };
 
                 peek_col = set_color_alpha(peek_col, 0xC0);
                 draw_pos = draw_string(app, face_id, first_peek_param, draw_pos, peek_col);
@@ -389,4 +391,69 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
     }
 }
 
+function void
+jp_draw_vertical_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
+                               Face_ID face_id, View_ID vid, Buffer_ID buffer)
+{
+    ProfileScope(app, "jp Draw vertical scope helpers");
+    Scratch_Block scratch(app);
+    Token_Array token_array = get_token_array_from_buffer(app, buffer);
+    Face_Metrics metrics = get_face_metrics(app, face_id);
+    if(token_array.tokens != 0)
+    {
+        Rect_f32 buffer_region = view_get_buffer_region(app, vid);
+        i64 cursor_pos = view_get_cursor_pos(app, vid);
+        Token_Iterator_Array it = token_iterator_pos(0, &token_array, cursor_pos);
+        while (1)
+        {
+            Token *token = token_it_read(&it);
+
+            if (token->kind == TokenBaseKind_ScopeOpen || token->sub_kind == TokenCppKind_BraceOp)
+            {
+                i64 open_scope_line = get_line_number_from_pos(app, buffer, token->pos);
+                String_Const_u8 line_string = push_buffer_line(app, scratch, buffer, open_scope_line);
+                line_string = string_condense_whitespace(scratch, line_string);
+
+
+                // TODO(jack): Probably won't work when the scope start is off of the screen,
+                // position manually, and cetnre y in view
+                Range_i64 line_range = get_line_pos_range(app, buffer, open_scope_line);
+                Rect_f32 line_start_rect = text_layout_character_on_screen(app, text_layout_id, line_range.start);
+
+                // NOTE(jack): If the line is just an open scope we will render the previous line
+                // This is not ideal as anonymous scopes probably dont want a vertical render
+                // TODO(jack): Maybe check the previous line for typical scope openers: 
+                // if, for, while, struct, etc...
+                if(line_string.size == 1) {
+                    --open_scope_line;
+                    line_string = push_buffer_line(app, scratch, buffer, open_scope_line);
+                    line_string = string_condense_whitespace(scratch, line_string);
+                }
+
+                // dont bother rendering vertical blank lines
+                if(line_string.size > 0) {
+                    Vec2_f32 draw_string_start = line_start_rect.p1;
+                    // Position so the bottom of the drawn text is in line with the right of the starting char
+                    draw_string_start.x += (metrics.line_height - metrics.normal_advance);
+                    ARGB_Color col = finalize_color(defcolor_text_default, 0);
+                    col = set_color_alpha(col, 0xC0);
+                    
+                    // TODO(jack): not sure how this works, I think, the final parameter is the
+                    // basis vector of the string?
+                    draw_string_oriented(app, face_id, col, line_string,
+                                         draw_string_start, 0, V2f32(0.f, 1.f));
+                    
+                    // NOTE(jack): if we are at the outter most scope indentation, break;
+                    if (line_start_rect.x0 == buffer_region.x0) {
+                        break;
+                    }
+                }
+            }
+
+            if(!token_it_dec_non_whitespace(&it)) {
+                break;
+            }
+        }
+    }
+}
 #endif // FCODER_JACK_PUNTER_DRAW   
