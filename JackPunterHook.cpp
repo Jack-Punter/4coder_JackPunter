@@ -365,7 +365,7 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
     }
 
     if (GlobalShowVerticalScopeHelper) {
-        jp_draw_vertical_scope_helpers(app, text_layout_id, face_id, view_id, buffer);
+        jp_draw_scope_helpers(app, text_layout_id, face_id, view_id, buffer);
     }
 
     text_layout_free(app, text_layout_id);
