@@ -17,7 +17,7 @@
 global const i32 custom_highlight_base_size = 32;
 global bool GlobalIsRecordingMacro = false;
 global bool GlobalShowDefinitionPeeks = true;
-global bool GlobalShowVerticalScopeHelper = true;
+global bool GlobalShowScopeHelpers = true;
 
 global i32 type_token_kinds[] = {
     TokenCppKind_Void,
