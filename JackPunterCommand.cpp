@@ -20,6 +20,12 @@ CUSTOM_DOC("Toggle Show Definition Peeks")
     GlobalShowDefinitionPeeks = !GlobalShowDefinitionPeeks;
 }
 
+CUSTOM_UI_COMMAND_SIG(jp_toggle_scope_helpers)
+CUSTOM_DOC("Toggle Show Definition Peeks")
+{
+    GlobalShowScopeHelpers = !GlobalShowScopeHelpers;
+}
+
 CUSTOM_UI_COMMAND_SIG(jp_switch_buffer_other)
 CUSTOM_DOC("Switch to an open buffer in the other panel")
 {

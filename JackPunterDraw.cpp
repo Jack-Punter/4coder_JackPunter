@@ -184,6 +184,13 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
         draw_macro_definition();
     }
 }
+ARGB_Color set_color_alpha(ARGB_Color col, u8 alpha)
+{
+    ARGB_Color Result = col;
+    Result &= 0x00FFFFFF;
+    Result |= alpha << 24;
+    return Result;
+}
 
 function void
 jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
@@ -240,6 +247,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                 }
             }
         }
+    
         if (cursor_param_index <= function_parameter_list.node_count) {
             i64 line_after_cursor = 1 + get_line_number_from_pos(app, buffer, cursor_pos);
             i64 line_after_cursor_start = get_line_pos_range(app, buffer, line_after_cursor).start;
@@ -280,12 +288,6 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                 draw_pos.x += metrics.normal_advance;
 
                 ARGB_Color peek_col = finalize_color(defcolor_text_default, 0);
-                auto set_color_alpha = [](ARGB_Color col, u8 alpha) -> ARGB_Color {
-                    ARGB_Color Result = col;
-                    Result &= 0x00FFFFFF;
-                    Result |= alpha << 24;
-                    return Result;
-                };
 
                 peek_col = set_color_alpha(peek_col, 0xC0);
                 draw_pos = draw_string(app, face_id, first_peek_param, draw_pos, peek_col);
@@ -389,4 +391,136 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
     }
 }
 
-#endif // FCODER_JACK_PUNTER_DRAW   
+struct Scope_Helper_Node {
+    Scope_Helper_Node *next;
+    
+    String_Const_u8 helper_string;
+    Range_f32 y_range;
+};
+
+struct Scope_Helper_List {
+    Scope_Helper_Node *first;
+    Scope_Helper_Node *last;
+    i32 node_count;
+};
+
+function void
+scope_helper_list_push(Arena *arena, Scope_Helper_List *list, String_Const_u8 string, Range_f32 y_range)
+{
+    Scope_Helper_Node *node = push_array(arena, Scope_Helper_Node, 1);
+    node->helper_string = string;
+    node->y_range = y_range;
+    sll_queue_push(list->first, list->last, node);
+    ++list->node_count;
+}
+
+function void
+scope_helper_stack_push(Arena *arena, Scope_Helper_List *list, String_Const_u8 string)
+{
+    Scope_Helper_Node *node = push_array(arena, Scope_Helper_Node, 1);
+    node->helper_string = string;
+    sll_stack_push(list->first, node);
+    ++list->node_count;
+}
+
+function void
+fill_nest_helper_list(Application_Links *app, Arena * arena, Code_Index_Nest_List nest_list, Scope_Helper_List *helper_list,
+                      Text_Layout_ID text_layout_id, Buffer_ID buffer, i64 cursor_pos, Rect_f32 buffer_region)
+{
+    // NOTE(jack): Recursively iterates Nest lists to find all of the scopes that the cursor is within
+    Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
+    for (Code_Index_Nest *node = nest_list.first;
+         node != 0; node = node->next)
+    {
+        // TODO(jack): Im not 100% sure what open/close ranges contain.
+        // I belive they are just '{' and '}' for CodeIndexNest_Scope
+        Range_i64 nest_range = {node->open.start, node->close.start};
+        // We only care if the nest is a scope and it contains the cursor
+        if (node->kind == CodeIndexNest_Scope && range_contains(nest_range, cursor_pos))
+        {
+            i64 line = get_line_number_from_pos(app, buffer, nest_range.start);
+            String_Const_u8 line_string = push_buffer_line(app, arena, buffer, line);
+            line_string = string_condense_whitespace(arena, line_string);
+            if(line_string.size == 1) {
+                // NOTE(jack): go to the previous line if scope open is on its own line
+                line_string = push_buffer_line(app, arena, buffer, line - 1);
+                line_string = string_condense_whitespace(arena, line_string);
+            }
+            
+            Range_f32 helper_y_range = {buffer_region.y0, buffer_region.y1};
+            if (range_contains(visible_range, nest_range.end)) {
+                helper_y_range.end = text_layout_character_on_screen(app, text_layout_id, nest_range.end).y0;
+            }
+            if (range_contains(visible_range, nest_range.start)) {
+                helper_y_range.start = text_layout_character_on_screen(app, text_layout_id, nest_range.start).y1;
+            }
+            
+            // NOTE(jack): and this to the if condition to only show helpers if one the scope's start/end is offscreen
+            // !(range_contains(visible_range, nest_range.start) && range_contains(visible_range, nest_range.end)))
+            if(line_string.size > 0)
+            {
+                scope_helper_list_push(arena, helper_list, line_string, helper_y_range);
+            }
+            
+            // Recurse
+            fill_nest_helper_list(app, arena, node->nest_list, helper_list, text_layout_id, buffer, cursor_pos, buffer_region);
+            // NOTE(jack): The cusor cannot be in more than 1 nest per level as Scope's cannot interleave
+            break;
+        }
+    }
+}
+
+function void
+jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
+                      Face_ID face_id, View_ID vid, Buffer_ID buffer)
+{
+    ProfileScope(app, "jp Draw vertical scope helpers");
+    Token_Array token_array = get_token_array_from_buffer(app, buffer);
+    Face_Metrics metrics = get_face_metrics(app, face_id);
+    if(token_array.tokens != 0)
+    {
+        Scratch_Block scratch(app);
+        Rect_f32 buffer_region = view_get_buffer_region(app, vid);
+        
+        Scope_Helper_List scope_helpers = {};
+        Code_Index_File* file = code_index_get_file(buffer);
+        if (file != 0)
+        {
+            i64 cursor_pos = view_get_cursor_pos(app, vid);
+            fill_nest_helper_list(app, scratch, file->nest_list, &scope_helpers, text_layout_id, buffer, cursor_pos, buffer_region);
+        }
+        
+        // NOTE(jack): Draw the scope helpers
+        i32 index = 0;
+        for (Scope_Helper_Node *node = scope_helpers.first;
+             node != 0; (node = node->next), ++index)
+        {
+            i32 indent_amount = global_config.virtual_whitespace_regular_indent;
+            f32 xOffset = buffer_region.x0/* + metrics.line_height*/;
+            Rect_f32 text_clip = buffer_region;
+            text_clip.y0 = node->y_range.start;
+            text_clip.y1 = node->y_range.end;
+            Vec2_f32 draw_string_start = {
+                xOffset + index * (metrics.normal_advance * indent_amount),
+                node->y_range.start,
+            };
+            // NOTE(jack) advance the start as the text is rendered upwards
+            f32 string_length = node->helper_string.size * metrics.normal_advance;
+            
+            if (string_length < (node->y_range.end - node->y_range.start)) {
+                draw_string_start.y = (node->y_range.end + node->y_range.start + string_length) / 2.0f;
+            } else {
+                draw_string_start.y = Min(draw_string_start.y + string_length,
+                                          text_clip.y1);
+            }
+            ARGB_Color col = finalize_color(defcolor_text_default, 0);
+            col = set_color_alpha(col, 0xC0);
+            
+            Rect_f32 old_clip = draw_set_clip(app, text_clip);
+            draw_string_oriented(app, face_id, col, node->helper_string,
+                                 draw_string_start, 0, V2f32(0.f, -1.f));
+            draw_set_clip(app, old_clip);
+        }
+    }
+}
+#endif // FCODER_JACK_PUNTER_DRAW

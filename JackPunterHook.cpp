@@ -364,6 +364,10 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
         jp_draw_definition_helpers(app, text_layout_id, face_id, view_id, buffer);
     }
 
+    if (GlobalShowScopeHelpers) {
+        jp_draw_scope_helpers(app, text_layout_id, face_id, view_id, buffer);
+    }
+
     text_layout_free(app, text_layout_id);
     draw_set_clip(app, prev_clip);
 }
