@@ -26,7 +26,7 @@ global i32 type_token_kinds[] = {
     TokenCppKind_Int,
     TokenCppKind_Float,
     TokenCppKind_Double,
-    TokenCppKind_Long,-
+    TokenCppKind_Long,
     TokenCppKind_Short,
     TokenCppKind_Unsigned,
     TokenCppKind_Signed,
