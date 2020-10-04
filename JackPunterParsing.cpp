@@ -232,7 +232,8 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     highlight_string_list_push(scratch, list, di_string,
                                                HighlightType_Type, buffer_id, di_token->pos);
                 } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
-                           token->sub_kind == TokenCppKind_Class )
+                           token->sub_kind == TokenCppKind_Class ||
+                           token->sub_kind == TokenCppKind_Enum)
                 {
                     // NOTE(jack): struct MyStruct {int x, int y};
                     //             union MyUnion { struct {int x, int y}; int a[2]; };
