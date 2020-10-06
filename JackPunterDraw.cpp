@@ -6,41 +6,33 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
 {
     ProfileScope(app, "JP Get Token Color CPP");
     ARGB_Color color = fcolor_resolve(fcolor_id(defcolor_text_default));
-    switch (token.kind){
-        case TokenBaseKind_Preprocessor:
-        {
+    switch (token.kind) {
+        case TokenBaseKind_Preprocessor: {
             color = fcolor_resolve(fcolor_id(defcolor_preproc));
-        }break;
-        case TokenBaseKind_Keyword:
-        {
-            if (jp_is_type_token(&token)){
+        } break;
+        case TokenBaseKind_Keyword: {
+            if (jp_is_type_token(&token)) {
                 color = finalize_color(defcolor_keyword, 1);
             } else {
                 color = finalize_color(defcolor_keyword, 0);
             }
-        }break;
-        case TokenBaseKind_Comment:
-        {
+        } break;
+        case TokenBaseKind_Comment: {
             color = fcolor_resolve(fcolor_id(defcolor_comment));
-        }break;
-        case TokenBaseKind_LiteralString:
-        {
+        } break;
+        case TokenBaseKind_LiteralString: {
             color = fcolor_resolve(fcolor_id(defcolor_str_constant));
         }break;
-        case TokenBaseKind_LiteralInteger:
-        {
+        case TokenBaseKind_LiteralInteger: {
             color = fcolor_resolve(fcolor_id(defcolor_int_constant));
-        }break;
-        case TokenBaseKind_LiteralFloat:
-        {
+        } break;
+        case TokenBaseKind_LiteralFloat: {
             color = fcolor_resolve(fcolor_id(defcolor_float_constant));
-        }break;
-        case TokenBaseKind_Identifier:
-        {
+        } break;
+        case TokenBaseKind_Identifier: {
             Highlight_Data lookup_data;
             if (jp_custom_highlight_lookup(app, lexeme, &lookup_data)) {
-                switch (lookup_data.type)
-                {
+                switch (lookup_data.type) {
                     case HighlightType_Keyword: {
                         color = finalize_color(defcolor_keyword, 0);
                     } break;
@@ -55,34 +47,32 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
                     } break;
                 }
             }
-        }break;
+        } break;
     }
     // specifics override generals
     switch (token.sub_kind){
         case TokenCppKind_LiteralTrue:
-        case TokenCppKind_LiteralFalse:
-        {
+        case TokenCppKind_LiteralFalse: {
             color = fcolor_resolve(fcolor_id(defcolor_bool_constant));
         }break;
         case TokenCppKind_LiteralCharacter:
         case TokenCppKind_LiteralCharacterWide:
         case TokenCppKind_LiteralCharacterUTF8:
         case TokenCppKind_LiteralCharacterUTF16:
-        case TokenCppKind_LiteralCharacterUTF32:
-        {
+        case TokenCppKind_LiteralCharacterUTF32: {
             color = fcolor_resolve(fcolor_id(defcolor_char_constant));
-        }break;
-        case TokenCppKind_PPIncludeFile:
-        {
+        } break;
+        case TokenCppKind_PPIncludeFile: {
             color = fcolor_resolve(fcolor_id(defcolor_include));
-        }break;
+        } break;
     }
-
+    
     return(color);
 }
 
 function void
-jp_draw_cpp_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, Token_Array *array,  Buffer_ID buffer){
+jp_draw_cpp_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, Token_Array *array,  Buffer_ID buffer)
+{
     ProfileScope(app, "jp_draw_cpp_token_colors");
     Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
     i64 first_index = token_index_from_pos(array, visible_range.first);
@@ -395,9 +385,9 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
 
 struct Scope_Helper_Node {
     Scope_Helper_Node *next;
-
-    String_Const_u8 helper_string;
-    Range_f32 y_range;
+    
+    Range_i64 scope_header_range;
+    Range_i64 scope_line_range;
 };
 
 struct Scope_Helper_List {
@@ -407,21 +397,12 @@ struct Scope_Helper_List {
 };
 
 function void
-scope_helper_list_push(Arena *arena, Scope_Helper_List *list, String_Const_u8 string, Range_f32 y_range)
+scope_helper_list_push(Arena *arena, Scope_Helper_List *list, Range_i64 line_range, Range_i64 header_range)
 {
     Scope_Helper_Node *node = push_array(arena, Scope_Helper_Node, 1);
-    node->helper_string = string;
-    node->y_range = y_range;
+    node->scope_header_range = header_range;
+    node->scope_line_range = line_range;
     sll_queue_push(list->first, list->last, node);
-    ++list->node_count;
-}
-
-function void
-scope_helper_stack_push(Arena *arena, Scope_Helper_List *list, String_Const_u8 string)
-{
-    Scope_Helper_Node *node = push_array(arena, Scope_Helper_Node, 1);
-    node->helper_string = string;
-    sll_stack_push(list->first, node);
     ++list->node_count;
 }
 
@@ -429,12 +410,9 @@ global i64 GlobalMinimumLinesForScopeHelper = 15;
 
 function void
 fill_nest_helper_list(Application_Links *app, Arena * arena, Code_Index_Nest_Ptr_Array nest_array, Scope_Helper_List *helper_list,
-                      Text_Layout_ID text_layout_id, Buffer_ID buffer, i64 cursor_pos, Rect_f32 buffer_region)
+                      Buffer_ID buffer, i64 cursor_pos, Rect_f32 buffer_region)
 {
     // NOTE(jack): Recursively iterates Nest lists to find all of the scopes that the cursor is within
-    Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
-    /*for (Code_Index_Nest *node = nest_list.first;
-         node != 0; node = node->next)*/
     for (i32 i = 0; i < nest_array.count; ++i)
     {
         Code_Index_Nest *node = nest_array.ptrs[i];
@@ -444,63 +422,76 @@ fill_nest_helper_list(Application_Links *app, Arena * arena, Code_Index_Nest_Ptr
         // We only care if the nest is a scope and it contains the cursor
         if (node->kind == CodeIndexNest_Scope && range_contains(nest_range, cursor_pos))
         {
-            i64 line = get_line_number_from_pos(app, buffer, nest_range.start);
-            String_Const_u8 line_string = {};
-            i64 range_start_line = line;
-            i64 range_end_line = get_line_number_from_pos(app, buffer, nest_range.end);
-
+            i64 scope_start_line = get_line_number_from_pos(app, buffer, nest_range.start);;
+            i64 scope_end_line = get_line_number_from_pos(app, buffer, nest_range.end);
+            Range_i64 scope_header_range = {};
             // NOTE(jack): We occasionally get a Statement nest ("\r\n  ") after for loop paren nests,
             // So i will just skip a statement nest if we get one.
             Code_Index_Nest *prev_node = nest_array.ptrs[i - 1];
-            if(prev_node->kind == CodeIndexNest_Statement) {
+            if(prev_node && prev_node->kind == CodeIndexNest_Statement) {
                 prev_node = nest_array.ptrs[i - 2];
             }
-
-            if (prev_node->kind == CodeIndexNest_Paren) {
-                String_Const_u8 nest_string = push_buffer_range(app, arena, buffer, {prev_node->open.start, prev_node->close.end});
-
+            
+            if (prev_node && prev_node->kind == CodeIndexNest_Paren) {
                 i64 start_line = get_line_number_from_pos(app, buffer, prev_node->open.start);
                 i64 end_line   = get_line_number_from_pos(app, buffer, prev_node->close.end);
                 Range_i64 start_range = get_line_pos_range(app, buffer, start_line);
                 Range_i64 end_range = get_line_pos_range(app, buffer, end_line);
-
-                Range_i64 string_range = {start_range.start, end_range.end};
-                line_string = push_buffer_range(app, arena, buffer, string_range);
-                line_string = string_condense_whitespace(arena, line_string);
+                
+                scope_header_range = {start_range.start, end_range.end};
             } else {
-                line_string = push_buffer_line(app, arena, buffer, line);
-                line_string = string_condense_whitespace(arena, line_string);
+                scope_header_range = get_line_pos_range(app, buffer, scope_start_line);
             }
-
-            if(line_string.size == 1) {
+            
+            //if(line_string.size == 1) {
+            if(range_size(scope_header_range) == 1) {
                 // NOTE(jack): go to the previous line if scope open is on its own line
-                line_string = push_buffer_line(app, arena, buffer, line - 1);
-                line_string = string_condense_whitespace(arena, line_string);
+                scope_header_range = get_line_pos_range(app, buffer, scope_start_line - 1);
             }
 
-            Range_f32 helper_y_range = {buffer_region.y0, buffer_region.y1};
-            if (range_contains(visible_range, nest_range.end)) {
-                helper_y_range.end = text_layout_character_on_screen(app, text_layout_id, nest_range.end).y0;
-            }
-            if (range_contains(visible_range, nest_range.start)) {
-                helper_y_range.start = text_layout_character_on_screen(app, text_layout_id, nest_range.start).y1;
-            }
-
-            // NOTE(jack): if we are going to skip some scope helpers we need to add an element to the list,
-            // even if the string is empty, otherwise following scope highlights will be drawn in the wrong place.
-            if(range_end_line - range_start_line >= GlobalMinimumLinesForScopeHelper) {
-                scope_helper_list_push(arena, helper_list, line_string, helper_y_range);
-            } else {
-                // We need to add something to the list to prevent helpers being drawn at incorrect x locations
-                scope_helper_list_push(arena, helper_list, SCu8(""), helper_y_range);
-            }
+            // NOTE(jack): We will add all helpers, and let the drawing code decide if it should draw or not.
+            // This way we dont have to worry about pushing blank helpers to keep indentation correct on
+            // vertical helpers
+            scope_helper_list_push(arena, helper_list, {scope_start_line, scope_end_line}, scope_header_range);
 
             // Recurse
-            fill_nest_helper_list(app, arena, node->nest_array, helper_list, text_layout_id, buffer, cursor_pos, buffer_region);
-            // NOTE(jack): The cursor cannot be in more than 1 nest per level as Scope's cannot interleave
+            fill_nest_helper_list(app, arena, node->nest_array, helper_list, buffer, cursor_pos, buffer_region);
+            // NOTE(jack): The cursor cannot be in more than 1 nest per level as scope's cannot interleave.
+            // So it is safe to break after we have processed this nest
             break;
         }
     }
+}
+
+function Range_i64
+range_remove_whitespace_ends(Token_Array *token_array, Range_i64 range)
+{
+    Range_i64 Result = range;
+    Token_Iterator_Array it = token_iterator_pos(0, token_array, range.start);
+    Token *token = token_it_read(&it);
+    if(token->kind == TokenBaseKind_Whitespace) {
+        if (!token_it_inc_non_whitespace(&it)) {
+            return Result;
+        }
+        token = token_it_read(&it);
+        Result.start = token->pos;
+    }
+    it = token_iterator_pos(0, token_array, range.end);
+    token = token_it_read(&it);
+    if(token->kind == TokenBaseKind_Whitespace) {
+        if (!token_it_dec_non_whitespace(&it)) {
+            // NOTE(jack): As we can't break out of the loop if this fails,
+            // (which i dont think it can given how we get here),
+            // we will return the result as is (with end == range.end)
+            return Result;
+        } else {
+            token = token_it_read(&it);
+            // NOTE(jack): token->pos + token->size would end up on the
+            // following token which will be whitespace
+            Result.end = token->pos + token->size - 1;
+        }
+    }
+    return Result;
 }
 
 function void
@@ -510,50 +501,111 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
     ProfileScope(app, "jp Draw vertical scope helpers");
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
     Face_Metrics metrics = get_face_metrics(app, face_id);
+    i64 cursor_pos = view_get_cursor_pos(app, vid);
     if(token_array.tokens != 0)
     {
         Scratch_Block scratch(app);
         Rect_f32 buffer_region = view_get_buffer_region(app, vid);
-
+        
         Scope_Helper_List scope_helpers = {};
         Code_Index_File* file = code_index_get_file(buffer);
-        if (file != 0)
-        {
-            i64 cursor_pos = view_get_cursor_pos(app, vid);
-            fill_nest_helper_list(app, scratch, file->nest_array, &scope_helpers, text_layout_id, buffer, cursor_pos, buffer_region);
+        if (file != 0) {
+            fill_nest_helper_list(app, scratch, file->nest_array, &scope_helpers, buffer, cursor_pos, buffer_region);
         }
-
+        
         // NOTE(jack): Draw the scope helpers
         i32 index = 0;
+        f32 draw_rect_y_offset = 0.0f;
         for (Scope_Helper_Node *node = scope_helpers.first;
              node != 0; node = node->next, ++index)
         {
-            i32 indent_amount = global_config.virtual_whitespace_regular_indent;
-            f32 xOffset = buffer_region.x0/* + metrics.line_height*/;
-            Rect_f32 text_clip = buffer_region;
-            text_clip.y0 = node->y_range.start;
-            text_clip.y1 = node->y_range.end;
-            Vec2_f32 draw_string_start = {
-                xOffset + index * (metrics.normal_advance * indent_amount),
-                node->y_range.start,
-            };
+            if (!(node->scope_header_range.start == 0 && node->scope_header_range.start == 0))
+            {
+                // NOTE(jack): Querying the postion of a whitespace character (using 'text_layout_character_on_screen')
+                // results in a rect that is {MAX_FLOAT, MAX_FLOAT, -MAX_FLOAT, -MAX_FLOAT}
+                // In order to prevent this, we will trim the range so that the ends are non-whitespace charachters
+                Range_i64 header_range = range_remove_whitespace_ends(&token_array, node->scope_header_range);                
+                if(GlobalUseStickyScopeHelpers) {
+                    Rect_f32 header_start_rect = text_layout_character_on_screen(app, text_layout_id, header_range.start);
+                    if ((header_start_rect.y0 - draw_rect_y_offset) <= buffer_region.y0) {
+                        i64 start_line = get_line_number_from_pos(app, buffer, header_range.start);
+                        i64 end_line = get_line_number_from_pos(app, buffer, header_range.end);
+                        // buffer_line_y_difference Top(A) - Top(B)
+                        f32 draw_rect_height = buffer_line_y_difference(app, buffer, rect_width(buffer_region), face_id,
+                                                                        /*A*/end_line + 1, /*B*/start_line);
 
-            // NOTE(jack) advance the start as the text is rendered upwards
-            f32 string_length = node->helper_string.size * metrics.normal_advance;
-
-            if (string_length < (node->y_range.end - node->y_range.start)) {
-                draw_string_start.y = (node->y_range.end + node->y_range.start + string_length) / 2.0f;
-            } else {
-                draw_string_start.y = Min(draw_string_start.y + string_length,
-                                          text_clip.y1);
+                        Rect_f32 draw_rect = {};
+                        draw_rect.x0 = buffer_region.x0;
+                        draw_rect.x1 = buffer_region.x1;
+                        draw_rect.y0 = buffer_region.y0 + draw_rect_y_offset;
+                        draw_rect.y1 = draw_rect.y0 + draw_rect_height;
+                        
+                        Buffer_Point draw_buffer_point = {start_line, {0.0f, 0.0f}};
+                        Text_Layout_ID helper_text_layout = text_layout_create(app, buffer, draw_rect, draw_buffer_point);
+                        draw_rectangle(app, draw_rect, 0.f, finalize_color(defcolor_back, 0));
+                        
+                        // NOTE(jack): Stolen from jp_render_buffer, causes background of helper_text_layout to be the
+                        // correct color if using scope highlights
+                        if (global_config.use_scope_highlight) {
+                            Color_Array colors = finalize_color_array(defcolor_back_cycle);
+                            draw_scope_highlight(app, buffer, helper_text_layout, cursor_pos, colors.vals, colors.count);
+                        }
+                        
+                        jp_draw_cpp_token_colors(app, helper_text_layout, &token_array, buffer);
+                        draw_text_layout_default(app, helper_text_layout);
+                        text_layout_free(app, helper_text_layout);
+                        
+                        //draw_rect_y_offset += rect_height(draw_rect);
+                        draw_rect_y_offset += draw_rect_height;
+                    }
+                }
+                if (GlobalUseVerticalScopeHelpers) {
+                    if (node->scope_line_range.end - node->scope_line_range.start >= GlobalMinimumLinesForScopeHelper) {
+                        Range_f32 y_range = {};
+                        y_range.start = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.start).end;
+                        y_range.end = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.end).start;
+                        i32 indent_amount = global_config.virtual_whitespace_regular_indent;
+                        f32 xOffset = buffer_region.x0;
+                        Rect_f32 text_clip = buffer_region;
+                        text_clip.y0 = y_range.start;
+                        text_clip.y1 = y_range.end;
+                        Vec2_f32 draw_string_start = {
+                            xOffset + index * (metrics.normal_advance * indent_amount),
+                            y_range.start,
+                        };
+                        String_Const_u8 helper_string = push_buffer_range(app, scratch, buffer, node->scope_header_range);
+                        helper_string = string_condense_whitespace(scratch, helper_string);
+                        
+                        // NOTE(jack) advance the start as the text is rendered upwards
+                        f32 string_length = helper_string.size * metrics.normal_advance;
+                        
+                        if (string_length < (y_range.end - y_range.start)) {
+                            // Start y is the midpoint of the y_range + half the string length
+                            draw_string_start.y = (y_range.end + y_range.start + string_length) / 2.0f;
+                        } else {
+                            draw_string_start.y = Min(draw_string_start.y + string_length,
+                                                      text_clip.y1);
+                        }
+                        ARGB_Color col = finalize_color(defcolor_text_default, 0);
+                        col = set_color_alpha(col, 0xC0);
+                        
+                        Rect_f32 old_clip = draw_set_clip(app, text_clip);
+                        draw_string_oriented(app, face_id, col, helper_string,
+                                             draw_string_start, 0, V2f32(0.f, -1.f));
+                        draw_set_clip(app, old_clip);
+                    }
+                }
             }
+        }
+
+        // Draw a rectangle around the helpers to separate them from the buffer text
+        if(GlobalUseStickyScopeHelpers) {
+            Rect_f32 covered_rect = buffer_region;
+            covered_rect.y1 = covered_rect.y0 + draw_rect_y_offset;
             ARGB_Color col = finalize_color(defcolor_text_default, 0);
             col = set_color_alpha(col, 0xC0);
-
-            Rect_f32 old_clip = draw_set_clip(app, text_clip);
-            draw_string_oriented(app, face_id, col, node->helper_string,
-                                 draw_string_start, 0, V2f32(0.f, -1.f));
-            draw_set_clip(app, old_clip);
+            draw_rectangle_outline(app, covered_rect, global_config.cursor_roundness, 2.0f,
+                                   col);
         }
     }
 }
