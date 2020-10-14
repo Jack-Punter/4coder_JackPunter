@@ -56,11 +56,15 @@ bool operator==(const Highlight_Data& lhs, const Highlight_Data& rhs) {
             lhs.def_pos == rhs.def_pos);
 }
 
+#include "JackPunterLanguage.cpp"
+
 struct jp_app_data_t {
     // NOTE(jack): This will store the custom highlight information for all buffers
     Base_Allocator* table_allocator;
     Arena global_highlights_arena;
     Table_Data_Data custom_highlight_table;
+    Language_List languages;
+    Language *default_code_language;
 };
 
 struct jp_buffer_data_t {
@@ -71,10 +75,51 @@ struct jp_buffer_data_t {
     String_Const_u8_Array custom_highlight_array;
 
     b32 parse_contents = false;
+
+    Language *language;
 };
+
 CUSTOM_ID(attachment, jp_buffer_attachment);
 CUSTOM_ID(attachment, jp_app_attachment);
 CUSTOM_ID(attachment, buffer_parse_keywords_types_task);
+
+// NOTE(jack): Adding a custom color ids here allows you to add
+// color names to the theme file
+CUSTOM_ID(colors, defcolor_type);
+CUSTOM_ID(colors, defcolor_function);
+CUSTOM_ID(colors, defcolor_macro);
+
+function Language *
+jp_get_language_from_extension(Application_Links *app, String_Const_u8 ext)
+{
+    Language *Result = 0;
+    Managed_Scope global_scope = get_global_managed_scope(app);
+    jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
+    
+    bool found = false;
+    for (Language *node = app_data->languages.first;
+         node != 0; node = node->next)
+    {
+        Scratch_Block scratch(app);
+        List_String_Const_u8 ext_list = string_split(scratch, node->ext_string, (u8*)".", 1);
+        for(Node_String_Const_u8 *sNode = ext_list.first; sNode != 0; sNode = sNode->next){
+            if (string_match(ext, sNode->string)){
+                Result = node;
+                found = true;
+                break;
+            }
+        }
+        if (found) {
+            break;
+        }
+    }
+
+    if (!found) {
+        Result = app_data->default_code_language;
+    }
+
+    return Result;
+}
 
 function b32
 jp_is_type_token(Token* token){
@@ -241,6 +286,42 @@ custom_layer_init(Application_Links *app)
         app, push_string_copy(&app_data->global_highlights_arena, SCu8("final")),
         nd_keyword_data
     );
+
+
+    // Language definitions
+    Language *cpp_language = push_array(&app_data->global_highlights_arena, Language, 1);
+    cpp_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("Cpp"));
+    cpp_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".c.cpp.h.hpp"));
+    // NOTE(jack): Casting not ideal here, should porobably wrap into a Data instead
+    // this so that you can pass a pointer to either a Lex_State_cpp or Lex_State_Odin;
+    cpp_language->lex_init =   (lex_init_func)lex_full_input_cpp_init;
+    cpp_language->lex_breaks = (lex_breaks_func)lex_full_input_cpp_breaks;
+    cpp_language->get_token_color = jp_get_token_color_cpp;
+    cpp_language->parse_content = jp_parse_cpp_content;
+
+    Language *odin_language = push_array(&app_data->global_highlights_arena, Language, 1);
+    odin_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("Odin"));
+    odin_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".odin"));
+    odin_language->lex_init = (lex_init_func)lex_full_input_odin_init;
+    odin_language->lex_breaks = (lex_breaks_func)lex_full_input_odin_breaks;
+    odin_language->get_token_color = jp_get_token_color_odin;
+    odin_language->parse_content = jp_parse_odin_content;
+
+    Language *datadesk_language = push_array(&app_data->global_highlights_arena, Language, 1);
+    datadesk_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("DataDesk"));
+    datadesk_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".ds"));
+    datadesk_language->lex_init = (lex_init_func)lex_full_input_cpp_init;
+    datadesk_language->lex_breaks = (lex_breaks_func)lex_full_input_cpp_breaks;
+    datadesk_language->get_token_color = jp_get_token_color_cpp;
+    datadesk_language->parse_content = jp_parse_datadesk_content;
+
+    Language_List *lang_list = &app_data->languages;
+    sll_queue_push(lang_list->first, lang_list->last, cpp_language);
+    sll_queue_push(lang_list->first, lang_list->last, odin_language);
+    sll_queue_push(lang_list->first, lang_list->last, datadesk_language);
+    // Set a default fallback language in case there is not a language defined
+    // for a given file extension
+    app_data->default_code_language = cpp_language;
 }
 
 #endif // FCODER_JACK_PUNTER

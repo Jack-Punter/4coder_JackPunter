@@ -1,29 +1,30 @@
 #if !defined(FCODER_JACK_PUNTER_HOOKS)
 #define FCODER_JACK_PUNTER_HOOKS
 
+#include "JackPunterAsync.cpp"
+
 static void
-jp_tick(Application_Links *app, Frame_Info frame_info) 
+jp_tick(Application_Links *app, Frame_Info frame_info)
 {
     ProfileScope(app, "JP Tick Hook");
-    default_tick(app, frame_info);
-
+    
+    /* default_tick */
+    code_index_update_tick(app);
+    if (tick_all_fade_ranges(app, frame_info.animation_dt)){
+        animate_in_n_milliseconds(app, 0);
+    }
+    /* end default tick */
+    
     Buffer_ID buffer = get_buffer_next(app, 0, Access_Read);
     do {
         Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer);
         jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                          jp_buffer_data_t);
-        if (buffer_data && buffer_data->parse_contents) {
-            Scratch_Block scratch(app);
-            Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
-            String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer);
-            String_Const_u8 ext = string_file_extension(buffer_filename);
-
-            if (*active_command_map == (Command_Map_ID)mapid_code) {
-                jp_parse_custom_highlights(app, buffer);
-            }
+        if (buffer_data && buffer_data->parse_contents && buffer_data->language != 0) {
+            jp_parse_custom_highlights(app, buffer);
             buffer_data->parse_contents = false;
         }
-
+        
         // NOTE(jack): returns zero when its the last buffer
         buffer = get_buffer_next(app, buffer, Access_Read);
     } while (buffer);
@@ -38,48 +39,26 @@ CUSTOM_DOC("Jack Punter save file")
     
     Scratch_Block scratch(app);
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
-
-    if (*active_command_map == (Command_Map_ID)mapid_code) {
+    jp_buffer_data_t *buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, jp_buffer_data_t);
+    
+    if (buffer_data->language != 0) {
         jp_parse_custom_highlights(app, buffer_id);
     }
-
+    
     return 0;
 }
 
 BUFFER_HOOK_SIG(jp_end_buffer){
     Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
+    jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
                                                      jp_buffer_data_t);
-
+    
     for(int i = 0; i < buffer_data->custom_highlight_array.count; ++i) {
         jp_erase_custom_highlight(app, buffer_data->custom_highlight_array.vals[i]);
     }
     linalloc_clear(&buffer_data->custom_highlights_arena);
     end_buffer_close_jump_list(app, buffer_id);
     return(0);
-}
-
-struct AsyncParserData {
-    Buffer_ID buffer_id;
-    Async_Task lexer_task;
-};
-
-void
-jp_trigger_parse_buffer(Async_Context *actx, Data data)
-{
-    if(data.size == sizeof(AsyncParserData)) {
-        Application_Links *app = actx->app;
-        AsyncParserData* ParserData = (AsyncParserData*)data.data;
-        async_task_wait(actx->app, &global_async_system, ParserData->lexer_task);
-
-        acquire_global_frame_mutex(app);
-        Managed_Scope buffer_scope = buffer_get_managed_scope(app, ParserData->buffer_id);
-        jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment, 
-                                                        jp_buffer_data_t);
-        buffer_data->parse_contents = true;
-        release_global_frame_mutex(app);
-    }
 }
 
 BUFFER_HOOK_SIG(jp_begin_buffer)
@@ -89,16 +68,21 @@ CUSTOM_DOC("Jack Punter begin buffer")
     ProfileScope(app, "JP begin buffer");
     
     Scratch_Block scratch(app);
+    Managed_Scope scope = buffer_get_managed_scope(app, buffer_id);
+    jp_buffer_data_t* buffer_data = scope_attachment(app, scope, jp_buffer_attachment,
+                                                     jp_buffer_data_t);
+    
     
     b32 treat_as_code = false;
     String_Const_u8 file_name = push_buffer_file_name(app, scratch, buffer_id);
-
+    
     if (file_name.size > 0) {
         String_Const_u8_Array extensions = global_config.code_exts;
         String_Const_u8 ext = string_file_extension(file_name);
-    
+        
         for (i32 i = 0; i < extensions.count; ++i) {
             if (string_match(ext, extensions.strings[i])){
+                buffer_data->language = jp_get_language_from_extension(app, ext);
                 treat_as_code = true;
                 break;
             }
@@ -106,7 +90,6 @@ CUSTOM_DOC("Jack Punter begin buffer")
     }
     
     Command_Map_ID map_id = (treat_as_code)?(mapid_code):(mapid_file);
-    Managed_Scope scope = buffer_get_managed_scope(app, buffer_id);
     Command_Map_ID *map_id_ptr = scope_attachment(app, scope, buffer_map_id, Command_Map_ID);
     *map_id_ptr = map_id;
     
@@ -130,7 +113,7 @@ CUSTOM_DOC("Jack Punter begin buffer")
     Async_Task *lex_task_ptr = scope_attachment(app, scope, buffer_lex_task, Async_Task);
     if (use_lexer){
         ProfileBlock(app, "begin buffer kick off lexer");
-        *lex_task_ptr = async_task_no_dep(&global_async_system, do_full_lex_async, make_data_struct(&buffer_id));
+        *lex_task_ptr = async_task_no_dep(&global_async_system, jp_do_full_lex_async, make_data_struct(&buffer_id));
     }
     
     {
@@ -151,41 +134,35 @@ CUSTOM_DOC("Jack Punter begin buffer")
     }
     
     //=====================================================================
-
-    Managed_Scope buffer_scope = buffer_get_managed_scope(app, buffer_id);
-    Command_Map_ID *active_command_map = scope_attachment(app, buffer_scope, buffer_map_id, Command_Map_ID);
-
-    if (*active_command_map == (Command_Map_ID)mapid_code) {
-        jp_buffer_data_t* buffer_data = scope_attachment(app, buffer_scope, jp_buffer_attachment,
-                                                         jp_buffer_data_t);
+    
+    if (buffer_data->language != 0) {
         buffer_data->custom_highlights_arena = make_arena_system();
-
-        //jp_parse_keywords_types(app, buffer_id);
-        {
+        
+        if (use_lexer) {
             ProfileBlock(app, "begin buffer kick off parser");
             Async_Task *parser_task_ptr = scope_attachment(app, scope, buffer_parse_keywords_types_task, Async_Task);
             AsyncParserData data = { 0 };
             data.buffer_id = buffer_id;
             data.lexer_task = *lex_task_ptr;
-
+            
             String_Const_u8 buffer_filename = push_buffer_file_name(app, scratch, buffer_id);
             String_Const_u8 ext = string_file_extension(buffer_filename);
-
+            
             //*parser_task_ptr = async_task_no_dep(&global_async_system, jp_parse_keyword_types_async, make_data_struct(&data));
             *parser_task_ptr = async_task_no_dep(&global_async_system, jp_trigger_parse_buffer, make_data_struct(&data));
         }
     }
-
+    
     return 0;
 }
 
 function void
 jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
                  Buffer_ID buffer, Text_Layout_ID text_layout_id,
-                 Rect_f32 rect) 
+                 Rect_f32 rect)
 {
     ProfileScope(app, "JP render buffer");
-
+    
     View_ID active_view = get_active_view(app, Access_Always);
     b32 is_active_view = (active_view == view_id);
     Rect_f32 prev_clip = draw_set_clip(app, rect);
@@ -200,7 +177,7 @@ jp_render_buffer(Application_Links *app, View_ID view_id, Face_ID face_id,
     // NOTE(allen): Token colorizing
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
     if (token_array.tokens != 0) {
-        jp_draw_cpp_token_colors(app, text_layout_id, &token_array, buffer);
+        jp_draw_token_colors(app, text_layout_id, &token_array, buffer);
         
         // NOTE(allen): Scan for TODOs and NOTEs
         if (global_config.use_comment_keyword){
@@ -363,11 +340,11 @@ jp_render_caller(Application_Links *app, Frame_Info frame_info, View_ID view_id)
     if (is_active_view && GlobalShowDefinitionPeeks) {
         jp_draw_definition_helpers(app, text_layout_id, face_id, view_id, buffer);
     }
-
+    
     if (GlobalShowScopeHelpers) {
         jp_draw_scope_helpers(app, text_layout_id, face_id, view_id, buffer);
     }
-
+    
     text_layout_free(app, text_layout_id);
     draw_set_clip(app, prev_clip);
 }
