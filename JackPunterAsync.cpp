@@ -1,7 +1,7 @@
 #if !defined(FCODER_JACK_PUNTER_ASYNC)
 
 function void 
-jp_do_full_lex_async__inner(Async_Context *actx, Buffer_ID buffer_id)
+language_do_full_lex_async__inner(Async_Context *actx, Buffer_ID buffer_id)
 {    
     Application_Links *app = actx->app;
     ProfileScope(app, "async lex");
@@ -66,11 +66,11 @@ jp_do_full_lex_async__inner(Async_Context *actx, Buffer_ID buffer_id)
 }
 
 function void
-jp_do_full_lex_async(Async_Context *actx, Data data)
+language_do_full_lex_async(Async_Context *actx, Data data)
 {
     if (data.size == sizeof(Buffer_ID)){
         Buffer_ID buffer = *(Buffer_ID*)data.data;
-        jp_do_full_lex_async__inner(actx, buffer);
+        language_do_full_lex_async__inner(actx, buffer);
     }
 }
 

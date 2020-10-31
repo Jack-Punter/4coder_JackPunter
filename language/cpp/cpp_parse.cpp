@@ -42,14 +42,14 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     // NOTE(jack): If the defined to (dt) token is a keyword and is a type
                     if((dt_token->kind == TokenBaseKind_Keyword && jp_is_type_token(dt_token)))
                     {
-                        highlight_string_list_push(scratch, list, di_string,
-                                                   HighlightType_Type, buffer_id, di_token->pos);
+                        highlight_string_list_push(scratch, list, di_string, HighlightType_Type,
+                                                   buffer_id, Ii64_size(di_token->pos, di_token->size));
                     }
                     // NOTE(jack): If the dt_token (keyword) is not a type or it is a custom keyword
                     else if (dt_token->kind == TokenBaseKind_Keyword && !jp_is_type_token(dt_token))
                     {
-                        highlight_string_list_push(scratch, list, di_string,
-                                                   HighlightType_Keyword, buffer_id, di_token->pos);
+                        highlight_string_list_push(scratch, list, di_string, HighlightType_Keyword,
+                                                   buffer_id, Ii64_size(di_token->pos, di_token->size));
                     }
                 } else {
                     // NOTE(jack): If there was a new line we need to decrement to not miss the next line.
@@ -94,8 +94,8 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                         // NOTE(jack): If the token after 'struct' is an identifier it is a new typename
                         if (second_token->kind == TokenBaseKind_Identifier) {
                             String_Const_u8 inner_struct_type = push_token_lexeme(app, scratch, buffer_id, second_token);
-                            highlight_string_list_push(scratch, list, inner_struct_type,
-                                                       HighlightType_Type, buffer_id, second_token->pos);
+                            highlight_string_list_push(scratch, list, inner_struct_type, HighlightType_Type,
+                                                       buffer_id, Ii64_size(second_token->pos, second_token->size));
                         } else if (second_token->kind == TokenBaseKind_ScopeOpen) {
                             b32 result = token_it_dec_non_whitespace(&it);
                             // NOTE(jack): we have iterated forward to this point so shouldn't fail.
@@ -114,11 +114,10 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                         break;
                     }
                     String_Const_u8 di_string = push_token_lexeme(app, scratch, buffer_id, di_token);
-                    highlight_string_list_push(scratch, list, di_string,
-                                               HighlightType_Type, buffer_id, di_token->pos);
+                    highlight_string_list_push(scratch, list, di_string, HighlightType_Type,
+                                               buffer_id, Ii64_size(di_token->pos, di_token->size));
                 } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
-                           token->sub_kind == TokenCppKind_Class ||
-                           token->sub_kind == TokenCppKind_Enum)
+                           token->sub_kind == TokenCppKind_Class || token->sub_kind == TokenCppKind_Enum)
                 {
                     // NOTE(jack): struct MyStruct {int x, int y};
                     //             union MyUnion { struct {int x, int y}; int a[2]; };
@@ -129,8 +128,8 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     Token *next_token = token_it_read(&it);
                     if(next_token->kind == TokenBaseKind_Identifier) {
                         String_Const_u8 struct_name = push_token_lexeme(app, scratch, buffer_id, next_token);
-                        highlight_string_list_push(scratch, list, struct_name,
-                                                   HighlightType_Type, buffer_id, next_token->pos);
+                        highlight_string_list_push(scratch, list, struct_name, HighlightType_Type,
+                                                   buffer_id, Ii64_size(next_token->pos, next_token->size));
                     }
                 }
                 // TODO(jack): highlight enum class types.
@@ -148,6 +147,7 @@ function void
 jp_parse_cpp_content(Application_Links *app, Arena *scratch,
                      List_Highlight_String_Data *list, Buffer_ID buffer_id)
 {
+    ProfileScope(app, "JP Parse Cpp Content");
     jp_parse_cpp_keywords_types(app, scratch, list, buffer_id);
     Used_Note_Kinds kinds = { 0 };
     kinds.CodeIndex_Function = true;

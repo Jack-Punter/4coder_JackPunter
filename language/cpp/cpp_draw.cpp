@@ -11,9 +11,9 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
         } break;
         case TokenBaseKind_Keyword: {
             if (jp_is_type_token(&token)) {
-                color = finalize_color(defcolor_keyword, 1);
+                color = fcolor_resolve(fcolor_id(defcolor_type));
             } else {
-                color = finalize_color(defcolor_keyword, 0);
+                color = fcolor_resolve(fcolor_id(defcolor_keyword));
             }
         } break;
         case TokenBaseKind_Comment: {
@@ -29,23 +29,7 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
             color = fcolor_resolve(fcolor_id(defcolor_float_constant));
         } break;
         case TokenBaseKind_Identifier: {
-            Highlight_Data lookup_data;
-            if (jp_custom_highlight_lookup(app, lexeme, &lookup_data)) {
-                switch (lookup_data.type) {
-                    case HighlightType_Keyword: {
-                        color = fcolor_resolve(fcolor_id(defcolor_keyword));
-                    } break;
-                    case HighlightType_Type: {
-                        color = fcolor_resolve(fcolor_id(defcolor_type));
-                    } break;
-                    case HighlightType_Function: {
-                        color = fcolor_resolve(fcolor_id(defcolor_function));
-                    } break;
-                    case HighlightType_Macro: {
-                        color = fcolor_resolve(fcolor_id(defcolor_macro));
-                    } break;
-                }
-            }
+            color = jp_get_token_color_from_identifier_info(app, lexeme);
         } break;
     }
     // specifics override generals

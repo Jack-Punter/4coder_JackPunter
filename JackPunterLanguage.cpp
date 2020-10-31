@@ -8,7 +8,7 @@ struct List_Highlight_String_Data;
 
 // When a language lexer is generated it will create a Lex_State_[langauge]
 // These should be added here, so that we always have enough space
-// to store a lexers state. (used in jp_do_full_lex_async__inner)
+// to store a lexers state. (used in language_do_full_lex_async__inner)
 union Generic_Lexer_State {
     Lex_State_Cpp cppState;
     Lex_State_Odin odinState;
@@ -16,6 +16,7 @@ union Generic_Lexer_State {
 
 typedef void (*lex_init_func)(Generic_Lexer_State*, String_Const_u8 /* content * */);
 typedef b32 (*lex_breaks_func)(Arena*, Token_List *, Generic_Lexer_State *, i32 );
+typedef Token_List (*lex_full_input_func)(Arena *arena, String_Const_u8 input);
 typedef ARGB_Color (*get_token_color_func)(Application_Links *app, Token token,
                                            String_Const_u8 lexeme);
 
@@ -29,6 +30,7 @@ struct Language
     String_Const_u8 ext_string;
     lex_init_func lex_init;
     lex_breaks_func lex_breaks;
+    lex_full_input_func lex_full_input;
     get_token_color_func get_token_color;
     parse_content_func parse_content;
 

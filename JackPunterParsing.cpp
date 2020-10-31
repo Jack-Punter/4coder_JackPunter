@@ -18,20 +18,27 @@ struct List_Highlight_String_Data {
 };
 
 function void
+highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list,
+                           Highlight_String_Data data)
+{
+    // Add the data to the list
+    Node_Highlight_String_Data *node = push_array(arena, Node_Highlight_String_Data, 1);
+    sll_queue_push(list->first, list->last, node);
+    node->data = data;
+    list->node_count += 1;
+}
+
+function void
 highlight_string_list_push(Arena *arena, List_Highlight_String_Data *list, String_Const_u8 string,
-                           HighlightType type, Buffer_ID buffer, i64 pos)
+                           HighlightType type, Buffer_ID buffer, Range_i64 name_range)
 {
     Highlight_String_Data highlight_data = {};
     highlight_data.string = string;
     highlight_data.data.type = type;
     highlight_data.data.def_buffer = buffer;
-    highlight_data.data.def_pos = pos;
+    highlight_data.data.name_range = name_range;
 
-    // Add the data to the list
-    Node_Highlight_String_Data *node = push_array(arena, Node_Highlight_String_Data, 1);
-    sll_queue_push(list->first, list->last, node);
-    node->data = highlight_data;
-    list->node_count += 1;
+    highlight_string_list_push(arena, list, highlight_data);
 }
 
 function String_Const_u8_Array
@@ -63,6 +70,29 @@ finalize_highlight_string_list(Application_Links *app, Arena *arena,
         }
     }
     return Result;
+}
+
+// NOTE(jack): Identifier lookup that will include stuff from this file
+// (for use mid parse)
+function b32
+jp_get_existing_identifier_data(Application_Links *app, String_Const_u8 name,
+                                List_Highlight_String_Data *list, Buffer_ID buffer_id,
+                                Highlight_Data *data)
+{
+    b32 found = jp_custom_highlight_lookup(app, name, data);
+
+    if (!found) {
+        for (Node_Highlight_String_Data *node = list->first;
+             node != 0; node = node->next)
+        {
+            if (string_match(node->data.string, name)) {
+                *data = node->data.data;
+                found = true;
+                break;
+            }
+        }
+    }
+    return found;
 }
 
 function b32
@@ -174,17 +204,17 @@ jp_parse_using_code_index(Application_Links *app, Arena *scratch, List_Highlight
                                     PushSize_(memory_arena *Arena, memory_index Size)
                                     { ... }
                                 */
-                                highlight_string_list_push(scratch, list, string,
-                                                           HighlightType_Function, buffer_id, token->pos);
+                                highlight_string_list_push(scratch, list, string, HighlightType_Function,
+                                                           buffer_id, Ii64_size(token->pos, token->size));
                             } else if(used_note_kinds.CodeIndex_Type && this_note->note_kind == CodeIndexNote_Type) {
-                                highlight_string_list_push(scratch, list, string,
-                                                           HighlightType_Type, buffer_id, token->pos);
+                                highlight_string_list_push(scratch, list, string, HighlightType_Type,
+                                                           buffer_id, Ii64_size(token->pos, token->size));
                             } else if (used_note_kinds.CodeIndex_Macro &&
                                        (prev_token && prev_token->sub_kind == TokenCppKind_PPDefine) &&
                                        this_note->note_kind == CodeIndexNote_Macro)
                             {
-                                highlight_string_list_push(scratch, list, string,
-                                                           HighlightType_Macro, buffer_id, token->pos);
+                                highlight_string_list_push(scratch, list, string, HighlightType_Macro,
+                                                           buffer_id, Ii64_size(token->pos, token->size));
                             }
                             // NOTE(jack): We have found the note for this token,
                             // so we can break out of the note loop.
@@ -214,9 +244,8 @@ jp_parse_custom_highlights(Application_Links *app, Buffer_ID buffer_id)
     // NOTE(jack): remove all of this buffers custom highlights
     for(int i = 0; i < buffer_data->custom_highlight_array.count; ++i) {
         jp_erase_custom_highlight(app, buffer_data->custom_highlight_array.vals[i]);
-    }
+    } 
     linalloc_clear(&buffer_data->custom_highlights_arena);
-
 
     // NOTE(jack): parse the buffers filling the list of custom highlight tokens.
     List_Highlight_String_Data list {};

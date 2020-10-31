@@ -3,10 +3,10 @@
 
 #include "../4coder_default_include.cpp"
 
-#define DEBUGGING 0
+#define DEBUGGING 1
 
 #if DEBUGGING
-#define DEBUG_MSG_LIT(str) print_message(app, string_u8_litexpr(str))
+#define DEBUG_MSG_LIT(str) print_message(app, SCu8(str))
 #define DEBUG_MSG_STR(str) print_message(app, str)
 #else
 #define DEBUG_MSG_LIT(str)
@@ -40,20 +40,26 @@ global i32 type_token_kinds[] = {
 
 enum HighlightType : u64 {
     HighlightType_Function,
+    HighlightType_Keyword,
     HighlightType_Macro,
     HighlightType_Type,
-    HighlightType_Keyword,
 };
 
 struct Highlight_Data {
     HighlightType type;
     Buffer_ID def_buffer;
-    i64 def_pos;
+    Range_i64 name_range;
+
+    union {
+        struct /* HighlightType_Function Data */ {
+            Range_i64 param_range;
+        };
+    };
 };
 
 bool operator==(const Highlight_Data& lhs, const Highlight_Data& rhs) {
     return (lhs.def_buffer == rhs.def_buffer &&
-            lhs.def_pos == rhs.def_pos);
+            lhs.name_range == rhs.name_range);
 }
 
 #include "JackPunterLanguage.cpp"
@@ -187,6 +193,14 @@ jp_erase_custom_highlight(Application_Links *app, String_Const_u8 string)
     return table_erase(&app_data->custom_highlight_table, key);
 }
 
+function Language *
+buffer_get_language(Application_Links *app, Buffer_ID buffer)
+{
+    Managed_Scope scope = buffer_get_managed_scope(app, buffer);
+    jp_buffer_data_t *buffer_data = scope_attachment(app, scope, jp_buffer_attachment, jp_buffer_data_t);
+    return buffer_data->language;
+}
+
 #include "JackPunterParsing.cpp"
 // NOTE(jack): Custom Command Definitions
 #include "JackPunterCommand.cpp"
@@ -212,6 +226,7 @@ custom_layer_init(Application_Links *app)
     set_custom_hook(app, HookID_EndBuffer, jp_end_buffer);
     set_custom_hook(app, HookID_RenderCaller, jp_render_caller);
     set_custom_hook(app, HookID_SaveFile, jp_file_save);
+    set_custom_hook(app, HookID_BufferEditRange, language_buffer_edit_range);
     
     mapping_init(tctx, &framework_mapping);
     
@@ -296,6 +311,7 @@ custom_layer_init(Application_Links *app)
     // this so that you can pass a pointer to either a Lex_State_cpp or Lex_State_Odin;
     cpp_language->lex_init =   (lex_init_func)lex_full_input_cpp_init;
     cpp_language->lex_breaks = (lex_breaks_func)lex_full_input_cpp_breaks;
+    cpp_language->lex_full_input = lex_full_input_cpp;
     cpp_language->get_token_color = jp_get_token_color_cpp;
     cpp_language->parse_content = jp_parse_cpp_content;
 
@@ -304,16 +320,20 @@ custom_layer_init(Application_Links *app)
     odin_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".odin"));
     odin_language->lex_init = (lex_init_func)lex_full_input_odin_init;
     odin_language->lex_breaks = (lex_breaks_func)lex_full_input_odin_breaks;
+    odin_language->lex_full_input = lex_full_input_odin;
     odin_language->get_token_color = jp_get_token_color_odin;
     odin_language->parse_content = jp_parse_odin_content;
 
+    // NOTE(jack): Datadesk support via the odin lexer/parsing routines as they are have
+    // very similar syntax
     Language *datadesk_language = push_array(&app_data->global_highlights_arena, Language, 1);
     datadesk_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("DataDesk"));
     datadesk_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".ds"));
-    datadesk_language->lex_init = (lex_init_func)lex_full_input_cpp_init;
-    datadesk_language->lex_breaks = (lex_breaks_func)lex_full_input_cpp_breaks;
-    datadesk_language->get_token_color = jp_get_token_color_cpp;
-    datadesk_language->parse_content = jp_parse_datadesk_content;
+    datadesk_language->lex_init = (lex_init_func)lex_full_input_odin_init;
+    datadesk_language->lex_breaks = (lex_breaks_func)lex_full_input_odin_breaks;
+    datadesk_language->lex_full_input = lex_full_input_odin;
+    datadesk_language->get_token_color = jp_get_token_color_odin;
+    datadesk_language->parse_content = jp_parse_odin_content;
 
     Language_List *lang_list = &app_data->languages;
     sll_queue_push(lang_list->first, lang_list->last, cpp_language);

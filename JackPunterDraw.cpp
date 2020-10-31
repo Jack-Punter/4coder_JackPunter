@@ -31,6 +31,32 @@ jp_draw_token_colors(Application_Links *app, Text_Layout_ID text_layout_id, Toke
     }
 }
 
+function ARGB_Color
+jp_get_token_color_from_identifier_info(Application_Links *app, String_Const_u8 lexeme)
+{
+    ARGB_Color color = fcolor_resolve(fcolor_id(defcolor_text_default));;
+    Highlight_Data lookup_data;
+    if (jp_custom_highlight_lookup(app, lexeme, &lookup_data)) {
+        switch (lookup_data.type) {
+            case HighlightType_Function: {
+                color = fcolor_resolve(fcolor_id(defcolor_function));
+            } break;
+            case HighlightType_Keyword: {
+                color = fcolor_resolve(fcolor_id(defcolor_keyword));
+            } break;
+            case HighlightType_Macro: {
+                color = fcolor_resolve(fcolor_id(defcolor_macro));
+            } break;
+            case HighlightType_Type: {
+                color = fcolor_resolve(fcolor_id(defcolor_type));
+            } break;
+        }
+    }
+    return color;
+}
+
+// TODO(jack): IMPORTANT, redo all uses of HighlightData.name_range.start
+
 function void
 jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
                          Face_ID face_id, View_ID vid, Buffer_ID buffer,
@@ -42,7 +68,7 @@ jp_draw_macro_definition(Application_Links *app, Text_Layout_ID text_layout_id,
     Rect_f32 buffer_region = view_get_buffer_region(app, vid);
 
     i64 def_line = get_line_number_from_pos(app, highlight_data.def_buffer,
-                                            highlight_data.def_pos);
+                                            highlight_data.name_range.start);
 
     Range_i64 def_line_range = get_line_pos_range(app, highlight_data.def_buffer, def_line);
     Buffer_Point def_buffer_point = {def_line, 0};
@@ -133,7 +159,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
         Token_Iterator_Array it = token_iterator_pos(0, &def_buffer_tokens, cursor_pos);
 
         List_String_Const_u8 function_parameter_list = {};
-        it = token_iterator_pos(0, &def_buffer_tokens, highlight_data.def_pos);
+        it = token_iterator_pos(0, &def_buffer_tokens, highlight_data.name_range.start);
         // NOTE(jack): loop from the definition token forwards
         {
             b32 found_close_paren = false;
@@ -157,7 +183,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                     // NOTE(jack): If we reach the closing paren of the function
                     if (--paren_opens == 0) {
                         String_Const_u8 param_string =
-                            push_buffer_range(app, scratch, buffer,
+                            push_buffer_range(app, scratch, highlight_data.def_buffer,
                                               {transient_single_param_start, token->pos});
                         String_Const_u8 condensed_param_string = string_condense_whitespace(scratch, param_string);
                         string_list_push(scratch, &function_parameter_list, condensed_param_string);
@@ -166,7 +192,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                     }
                 } else if(token->sub_kind == TokenCppKind_Comma) {
                     String_Const_u8 param_string =
-                        push_buffer_range(app, scratch, buffer,
+                        push_buffer_range(app, scratch, highlight_data.def_buffer,
                                           {transient_single_param_start, token->pos});
                     String_Const_u8 condensed_param_string = string_condense_whitespace(scratch, param_string);
                     string_list_push(scratch, &function_parameter_list, condensed_param_string);
@@ -231,7 +257,7 @@ function void
 jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                            Face_ID face_id, View_ID vid, Buffer_ID buffer)
 {
-    ProfileScope(app, "JP Draw Macro definition");
+    ProfileScope(app, "JP Draw definition helpers");
     Scratch_Block scratch(app);
     Token_Array token_array = get_token_array_from_buffer(app, buffer);
     if(token_array.tokens != 0)
@@ -270,8 +296,8 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
                         return (type == HighlightType_Function && open_count > close_count);
                     };
 
-                    found_peek_target = is_macro_peek_target(lookup_data.type,open_count, close_count) ||
-                        is_function_peek_target(lookup_data.type,open_count, close_count);
+                    found_peek_target = is_macro_peek_target(lookup_data.type, open_count, close_count) ||
+                        is_function_peek_target(lookup_data.type, open_count, close_count);
                 }
                 else
                 {
@@ -299,7 +325,7 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
         }
         // If a peek target has been found and it isn't the definition
         if (found_peek_target &&
-            !(lookup_data.def_buffer == buffer && lookup_data.def_pos == peek_target->pos))
+            !(lookup_data.def_buffer == buffer && lookup_data.name_range.start == peek_target->pos))
         {
             Rect_f32 popup_anchor_rect = text_layout_character_on_screen(
                                                                          app, text_layout_id, peek_target->pos
@@ -506,8 +532,11 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                         i32 indent_amount = global_config.virtual_whitespace_regular_indent;
                         // NOTE(jack): The amount of x added per scope helper
                         f32 xOffset_per_index = (metrics.normal_advance * indent_amount);
+
                         // NOTE(jack): the constant xOffset for all scope helpers
-                        f32 xOffset = buffer_region.x0 + ((xOffset_per_index - metrics.line_height) / 2.f);
+                        f32 xOffset = buffer_region.x0;
+                        // NOTE(jack): Add this to horizontally center the scope helpers in the indent sapce
+                        // ((xOffset_per_index - metrics.line_height) / 2.f)*/;
                         
                         Rect_f32 text_clip = buffer_region;
                         text_clip.y0 = y_range.start;

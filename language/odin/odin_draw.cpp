@@ -1,30 +1,5 @@
 #if !defined(FCODER_JACK_PUNTER_ODIN_DRAW)
 
-// Common
-function b32 odin_is_builtin_type(Token *token)
-{
-    return TokenOdinKind_byte <= token->sub_kind &&
-        token->sub_kind <= TokenOdinKind_u128be;
-}
-
-function b32 odin_is_builtin_proc(Token *token)
-{
-    return TokenOdinKind_len <= token->sub_kind &&
-        token->sub_kind <= TokenOdinKind_card;
-}
-
-function b32 odin_is_directive(Token *token)
-{
-    return TokenOdinKind_align <= token->sub_kind &&
-        token->sub_kind <= TokenOdinKind_partial;
-}
-
-function b32 odin_is_attribute(Token *token)
-{
-    return TokenOdinKind_builtin <= token->sub_kind &&
-        token->sub_kind <= TokenOdinKind_thread_local;
-}
-
 // Highlight
 static ARGB_Color jp_get_token_color_odin(Application_Links *app, Token token, String_Const_u8 lexeme)
 {
@@ -62,10 +37,13 @@ static ARGB_Color jp_get_token_color_odin(Application_Links *app, Token token, S
         } break;
 
         case TokenBaseKind_Identifier: {
-            if (odin_is_builtin_type(&token))
+            if (odin_is_builtin_type(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_type));
-            else if (odin_is_builtin_proc(&token))
+            } else if (odin_is_builtin_proc(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_function));
+            } else {
+                color = jp_get_token_color_from_identifier_info(app, lexeme);
+            }
         } break;
     }
     return(color);
