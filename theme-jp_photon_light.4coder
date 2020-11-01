@@ -1,0 +1,56 @@
+defcolor_back = 0xFFFFFFFF;
+defcolor_margin = 0xFFEEEEEE;
+
+// NOTE(jack): Lister item below the cursor
+defcolor_margin_hover = 0xFF888888; // TODO(jack): Find where this is used
+// NOTE(jack): Boder Surrounding current buffer and active lister item
+defcolor_margin_active = 0xFF888888; // TODO(jack): Find where this is used
+
+defcolor_list_item = {defcolor_margin, defcolor_back};
+defcolor_list_item_hover = {defcolor_margin_hover, defcolor_margin};
+defcolor_list_item_active = {defcolor_margin_active, defcolor_margin_active};
+defcolor_cursor = {0xFF008E00, 0xFFEE7700};
+defcolor_at_cursor = defcolor_back;
+defcolor_highlight_cursor_line = 0xFFEEEEEE;
+defcolor_highlight = 0xFFF2CA00;
+defcolor_mark = 0xFF2A2A2F;
+defcolor_text_default = 0xFF000000;
+defcolor_at_highlight = 0xFFFF00BA;
+defcolor_comment = 0xFF888888;
+defcolor_comment_pop = {0xFF00A000, 0xFFA00000, 0xFFA0A000}; // TODO(jack):
+defcolor_keyword = 0xFF0084FF;
+defcolor_str_constant = 0xFF00217A;
+defcolor_char_constant = defcolor_str_constant;
+defcolor_int_constant = defcolor_str_constant;
+defcolor_float_constant = defcolor_str_constant;
+defcolor_bool_constant = defcolor_str_constant;
+defcolor_include = defcolor_str_constant;
+defcolor_preproc = 0xFFA200FF;
+defcolor_special_character = 0xFFFF0000; // TODO(jack): Find where this is used
+defcolor_ghost_character = 0xFF4E5E46; // TODO(jack): Find where this is used
+
+defcolor_paste = 0xFFDDEE00; // NOTE(jack): Maybe update to one of the extra colours (F2CA00)?
+defcolor_undo = 0xFF00DDEE;
+
+defcolor_highlight_junk = 0xff3a0000; // TODO(jack): Find where this is used
+defcolor_highlight_white = 0xff003a3a; // TODO(jack): Find where this is used
+
+defcolor_bar = 0xFFDDDDDD;
+defcolor_bar_active = 0xFF666666;
+defcolor_base = 0xFF000000;
+// TODO(jack): Find where this is used
+defcolor_pop1 = 0xFF3C57DC;
+defcolor_pop2 = 0xFFFF0000;
+
+// NOTE(jack): Background Color Cycle
+defcolor_back_cycle = {0xFFFFFFFF, 0xFFEEEEEE, 0xFFDDDDDD};
+// NOTE(jack): Parenthesis helper colors.
+defcolor_text_cycle = {0xFF003DB1, 0xFFC50082, 0xFF6C00AB};
+
+defcolor_line_numbers_back = 0xFFEEEEEE;
+defcolor_line_numbers_text = 0xFF303030;
+
+// Custom Colors
+defcolor_type     = 0xFFFF00BA;
+defcolor_function = 0xFF008E00;
+defcolor_macro    = 0xFF6C00AB;
