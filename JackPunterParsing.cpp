@@ -258,6 +258,5 @@ jp_parse_custom_highlights(Application_Links *app, Buffer_ID buffer_id)
 
 #include "language/odin/odin_parse.cpp"
 #include "language/cpp/cpp_parse.cpp"
-#include "language/datadesk/datadesk_parse.cpp"
 
 #endif /* FCODER_JACK_PUNTER_PARSING */

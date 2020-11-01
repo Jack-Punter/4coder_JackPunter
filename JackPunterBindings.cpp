@@ -41,6 +41,7 @@ JackPunterGlobalBinding(Mapping *mapping, i64 global_id)
     Bind(command_lister,                KeyCode_P, KeyCode_Shift, KeyCode_Control);
     Bind(project_command_lister,        KeyCode_X, KeyCode_Alt, KeyCode_Shift);
     Bind(list_all_functions_current_buffer_lister, KeyCode_I, KeyCode_Alt);
+    Bind(list_all_functions_all_buffers_lister,    KeyCode_I, KeyCode_Alt, KeyCode_Shift);
     
     Bind(exit_4coder,          KeyCode_F4, KeyCode_Alt);
     Bind(project_fkey_command, KeyCode_F1);
