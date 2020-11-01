@@ -13,7 +13,6 @@ CUSTOM_DOC("Toggle Recording Keyboard Macro")
     }
 }
 
-
 CUSTOM_UI_COMMAND_SIG(jp_toggle_definition_peek)
 CUSTOM_DOC("Toggle Show Definition Peeks")
 {
