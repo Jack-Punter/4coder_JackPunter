@@ -20,8 +20,8 @@ global bool GlobalShowDefinitionPeeks = true;
 
 // Scope Helper Bools
 global bool GlobalShowScopeHelpers = true;
-global bool GlobalUseVerticalScopeHelpers = true;
-global bool GlobalUseStickyScopeHelpers = false;
+
+global Face_ID GlobalSmallCodeFaceID;
 
 global i32 type_token_kinds[] = {
     TokenCppKind_Void,
@@ -342,6 +342,14 @@ custom_layer_init(Application_Links *app)
     // Set a default fallback language in case there is not a language defined
     // for a given file extension
     app_data->default_code_language = cpp_language;
+
+
+    Face_Description desc = get_global_face_description(app);
+    --desc.parameters.pt_size;
+    desc.parameters.bold = 1;
+    desc.parameters.italic = 1;
+
+    GlobalSmallCodeFaceID = try_create_new_face(app, &desc);
 }
 
 #endif // FCODER_JACK_PUNTER

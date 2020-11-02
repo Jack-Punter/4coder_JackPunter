@@ -371,57 +371,26 @@ scope_helper_list_push(Arena *arena, Scope_Helper_List *list, Range_i64 line_ran
 global i64 GlobalMinimumLinesForScopeHelper = 15;
 
 function void
-fill_nest_helper_list(Application_Links *app, Arena * arena, Code_Index_Nest_Ptr_Array nest_array, Scope_Helper_List *helper_list,
+fill_nest_helper_list(Application_Links *app, Arena * arena, Scope_Helper_List *helper_list,
                       Buffer_ID buffer, i64 cursor_pos, Rect_f32 buffer_region)
 {
-    // NOTE(jack): Recursively iterates Nest lists to find all of the scopes that the cursor is within
-    for (i32 i = 0; i < nest_array.count; ++i)
+    Range_i64_Array enclosures = get_enclosure_ranges(app, arena, buffer, cursor_pos,
+                                                      RangeHighlightKind_CharacterHighlight);
+                                                      //FindNest_Paren);
+    // Iterate backwards so that the list is created from top level down.
+    for(int i = enclosures.count - 1; i >= 0; --i)
     {
-        Code_Index_Nest *node = nest_array.ptrs[i];
-        // TODO(jack): Im not 100% sure what open/close ranges contain.
-        // I belive they are just '{' and '}' for CodeIndexNest_Scope
-        Range_i64 nest_range = {node->open.start, node->close.start};
-        // We only care if the nest is a scope and it contains the cursor
-        if (node->kind == CodeIndexNest_Scope && range_contains(nest_range, cursor_pos))
-        {
-            i64 scope_start_line = get_line_number_from_pos(app, buffer, nest_range.start);;
-            i64 scope_end_line = get_line_number_from_pos(app, buffer, nest_range.end);
-            Range_i64 scope_header_range = {};
-            // NOTE(jack): We occasionally get a Statement nest ("\r\n  ") after for loop paren nests,
-            // So i will just skip a statement nest if we get one.
-            Code_Index_Nest *prev_node = nest_array.ptrs[i - 1];
-            if(prev_node && prev_node->kind == CodeIndexNest_Statement) {
-                prev_node = nest_array.ptrs[i - 2];
-            }
-            
-            if (prev_node && prev_node->kind == CodeIndexNest_Paren) {
-                i64 start_line = get_line_number_from_pos(app, buffer, prev_node->open.start);
-                i64 end_line   = get_line_number_from_pos(app, buffer, prev_node->close.end);
-                Range_i64 start_range = get_line_pos_range(app, buffer, start_line);
-                Range_i64 end_range = get_line_pos_range(app, buffer, end_line);
-                
-                scope_header_range = {start_range.start, end_range.end};
-            } else {
-                scope_header_range = get_line_pos_range(app, buffer, scope_start_line);
-            }
-            
-            //if(line_string.size == 1) {
-            if(range_size(scope_header_range) == 1) {
-                // NOTE(jack): go to the previous line if scope open is on its own line
-                scope_header_range = get_line_pos_range(app, buffer, scope_start_line - 1);
-            }
-
-            // NOTE(jack): We will add all helpers, and let the drawing code decide if it should draw or not.
-            // This way we dont have to worry about pushing blank helpers to keep indentation correct on
-            // vertical helpers
-            scope_helper_list_push(arena, helper_list, {scope_start_line, scope_end_line}, scope_header_range);
-
-            // Recurse
-            fill_nest_helper_list(app, arena, node->nest_array, helper_list, buffer, cursor_pos, buffer_region);
-            // NOTE(jack): The cursor cannot be in more than 1 nest per level as scope's cannot interleave.
-            // So it is safe to break after we have processed this nest
-            break;
+        Range_i64 line_range = get_line_range_from_pos_range(app, buffer,
+                                                             enclosures.ranges[i]);
+        Range_i64 scope_header_range = get_line_pos_range(app, buffer, line_range.start);
+        if(range_size(scope_header_range) == 1) {
+            // NOTE(jack): go to the previous line if scope open is on its own line
+            scope_header_range = get_line_pos_range(app, buffer, line_range.start - 1);
         }
+        // NOTE(jack): We will add all helpers, and let the drawing code decide if it should draw or not.
+        // This way we dont have to worry about pushing blank helpers to keep indentation correct on
+        // vertical helpers
+        scope_helper_list_push(arena, helper_list, line_range, scope_header_range);
     }
 }
 
@@ -448,9 +417,7 @@ range_remove_whitespace_ends(Token_Array *token_array, Range_i64 range)
             return Result;
         } else {
             token = token_it_read(&it);
-            // NOTE(jack): token->pos + token->size would end up on the
-            // following token which will be whitespace
-            Result.end = token->pos + token->size - 1;
+            Result.end = token->pos + token->size;
         }
     }
     return Result;
@@ -470,74 +437,45 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
         Rect_f32 buffer_region = view_get_buffer_region(app, vid);
         
         Scope_Helper_List scope_helpers = {};
-        Code_Index_File* file = code_index_get_file(buffer);
-        if (file != 0) {
-            fill_nest_helper_list(app, scratch, file->nest_array, &scope_helpers, buffer, cursor_pos, buffer_region);
-        }
         
+        fill_nest_helper_list(app, scratch, &scope_helpers, buffer, cursor_pos, buffer_region);
         // NOTE(jack): Draw the scope helpers
         i32 node_index = 0;
-        f32 draw_rect_y_offset = 0.0f;
         for (Scope_Helper_Node *node = scope_helpers.first;
              node != 0; node = node->next, ++node_index)
         {
             if (!(node->scope_header_range.start == 0 && node->scope_header_range.start == 0))
-            {
-                // NOTE(jack): Querying the postion of a whitespace character (using 'text_layout_character_on_screen')
-                // results in a rect that is {MAX_FLOAT, MAX_FLOAT, -MAX_FLOAT, -MAX_FLOAT}
-                // In order to prevent this, we will trim the range so that the ends are non-whitespace charachters
-                Range_i64 header_range = range_remove_whitespace_ends(&token_array, node->scope_header_range);                
-                if(GlobalUseStickyScopeHelpers) {
-                    Rect_f32 header_start_rect = text_layout_character_on_screen(app, text_layout_id, header_range.start);
-                    if ((header_start_rect.y0 - draw_rect_y_offset) <= buffer_region.y0) {
-                        i64 start_line = get_line_number_from_pos(app, buffer, header_range.start);
-                        i64 end_line = get_line_number_from_pos(app, buffer, header_range.end);
-                        // buffer_line_y_difference Top(A) - Top(B)
-                        f32 draw_rect_height = buffer_line_y_difference(app, buffer, rect_width(buffer_region), face_id,
-                                                                        /*A*/end_line + 1, /*B*/start_line);
+            {   
+                node->scope_header_range = range_remove_whitespace_ends(&token_array, node->scope_header_range);
+                Face_Metrics small_metrics = get_face_metrics(app, GlobalSmallCodeFaceID);
+                i32 indent_amount = global_config.virtual_whitespace_regular_indent;
+                Range_f32 buffer_y_range = rect_range_y(buffer_region);
 
-                        Rect_f32 draw_rect = {};
-                        draw_rect.x0 = buffer_region.x0;
-                        draw_rect.x1 = buffer_region.x1;
-                        draw_rect.y0 = buffer_region.y0 + draw_rect_y_offset;
-                        draw_rect.y1 = draw_rect.y0 + draw_rect_height;
-                        
-                        Buffer_Point draw_buffer_point = {start_line, {0.0f, 0.0f}};
-                        Text_Layout_ID helper_text_layout = text_layout_create(app, buffer, draw_rect, draw_buffer_point);
-                        draw_rectangle(app, draw_rect, 0.f, finalize_color(defcolor_back, 0));
-                        
-                        // NOTE(jack): Stolen from jp_render_buffer, causes background of helper_text_layout to be the
-                        // correct color if using scope highlights
-                        if (global_config.use_scope_highlight) {
-                            Color_Array colors = finalize_color_array(defcolor_back_cycle);
-                            draw_scope_highlight(app, buffer, helper_text_layout, cursor_pos, colors.vals, colors.count);
-                        }
-                        
-                        jp_draw_token_colors(app, helper_text_layout, &token_array, buffer);
-                        draw_text_layout_default(app, helper_text_layout);
-                        text_layout_free(app, helper_text_layout);
-                        
-                        //draw_rect_y_offset += rect_height(draw_rect);
-                        draw_rect_y_offset += draw_rect_height;
-                    }
-                }
-                if (GlobalUseVerticalScopeHelpers) {
-                    if (node->scope_line_range.end - node->scope_line_range.start >= GlobalMinimumLinesForScopeHelper) {
-                        Range_f32 y_range = {};
-                        // NOTE(jack): text_layout_line_on_screen returns the y range (in pixels) of a given
-                        // line in the text layout 
-                        y_range.start = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.start).end;
-                        y_range.end = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.end).start;
-                        
-                        i32 indent_amount = global_config.virtual_whitespace_regular_indent;
+                Range_f32 y_range = {};
+                // NOTE(jack): text_layout_line_on_screen returns the y range (in pixels) of a given
+                // line in the text layout 
+                y_range.start = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.start).end;
+                y_range.end = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.end).start;
+
+                i64 range_start_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.start);
+                i64 range_end_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.end);
+                
+                Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
+                b32 range_start_line_visible = range_contains(visible_range, range_start_line_pos);
+                b32 range_end_line_visible = range_contains(visible_range, range_end_line_pos);
+
+                //NOte
+                b32 UseVerticalScopeHelpers = !(range_start_line_visible || range_end_line_visible);
+                b32 UseTrailingScopeHelpers = !range_start_line_visible && range_end_line_visible;
+                if (UseVerticalScopeHelpers)
+                {
+                    if (node->scope_line_range.end - node->scope_line_range.start >= GlobalMinimumLinesForScopeHelper)
+                    {
                         // NOTE(jack): The amount of x added per scope helper
                         f32 xOffset_per_index = (metrics.normal_advance * indent_amount);
 
                         // NOTE(jack): the constant xOffset for all scope helpers
-                        f32 xOffset = buffer_region.x0;
-                        // NOTE(jack): Add this to horizontally center the scope helpers in the indent sapce
-                        // ((xOffset_per_index - metrics.line_height) / 2.f)*/;
-                        
+                        f32 xOffset = buffer_region.x0 + ((xOffset_per_index - metrics.line_height) / 2.f);                        
                         Rect_f32 text_clip = buffer_region;
                         text_clip.y0 = y_range.start;
                         text_clip.y1 = y_range.end;
@@ -549,7 +487,7 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                         helper_string = string_condense_whitespace(scratch, helper_string);
                         
                         // NOTE(jack) advance the start as the text is rendered upwards
-                        f32 string_length = helper_string.size * metrics.normal_advance;
+                        f32 string_length = helper_string.size * small_metrics.normal_advance;
                         
                         if (string_length < (y_range.end - y_range.start)) {
                             // Start y is the midpoint of the y_range + half the string length
@@ -558,27 +496,115 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                             draw_string_start.y = Min(draw_string_start.y + string_length,
                                                       text_clip.y1);
                         }
-                        ARGB_Color col = finalize_color(defcolor_text_default, 0);
-                        col = set_color_alpha(col, 0xC0);
+                        ARGB_Color helper_color = finalize_color(defcolor_comment, 0);
+                        helper_color = set_color_alpha(helper_color, 0x80);
                         
                         Rect_f32 old_clip = draw_set_clip(app, text_clip);
-                        draw_string_oriented(app, face_id, col, helper_string,
+                        draw_string_oriented(app, GlobalSmallCodeFaceID, helper_color, helper_string,
                                              draw_string_start, 0, V2f32(0.f, -1.f));
                         draw_set_clip(app, old_clip);
                     }
                 }
+                if (UseTrailingScopeHelpers)
+                {
+                    Range_i64 scope_close_line_range = get_line_pos_range(app, buffer, node->scope_line_range.end);
+                    scope_close_line_range = range_remove_whitespace_ends(&token_array, scope_close_line_range);
+                    Token *token = get_token_from_pos(app, buffer, scope_close_line_range.end - 1);
+                    if (token->kind == TokenBaseKind_ScopeClose || token->kind == TokenBaseKind_StatementClose)
+                    {
+                        String_Const_u8 helper_string = push_buffer_range(app, scratch, buffer,
+                                                                            node->scope_header_range);
+                        helper_string = string_condense_whitespace(scratch, helper_string);
+                        Vec2_f32 draw_pos = text_layout_character_on_screen(app, text_layout_id,
+                                                                                scope_close_line_range.end).p0;
+                        draw_pos.x += metrics.normal_advance;
+                        draw_pos.y += (metrics.line_height - small_metrics.line_height) / 2.0f;
+                        ARGB_Color helper_color = fcolor_resolve(fcolor_id(defcolor_comment));
+                        Vec2_f32 next = draw_string(app, GlobalSmallCodeFaceID, string_u8_litexpr(" <- "), draw_pos,
+                                                    helper_color);
+                        helper_color = set_color_alpha(helper_color, 0x80);
+                        draw_string(app, GlobalSmallCodeFaceID, helper_string, next, helper_color);
+                    }
+                }
+                
+                Rect_f32 scope_line;
+                scope_line.p0 = { buffer_region.x0 + indent_amount * metrics.normal_advance * node_index, y_range.start };
+                scope_line.p1 = { buffer_region.x0 + indent_amount * metrics.normal_advance * node_index, y_range.end };
+                scope_line.x0 += metrics.normal_advance / 2.0f;
+                scope_line.x1 = scope_line.x0 + 1;
+                ARGB_Color scope_line_color = set_color_alpha(finalize_color(defcolor_comment, 0), 0x60);
+                draw_rectangle(app, scope_line, 0, scope_line_color);
+                
             }
         }
+    }
+}
 
-        // Draw a rectangle around the helpers to separate them from the buffer text
-        if(GlobalUseStickyScopeHelpers) {
-            Rect_f32 covered_rect = buffer_region;
-            covered_rect.y1 = covered_rect.y0 + draw_rect_y_offset;
-            ARGB_Color col = finalize_color(defcolor_text_default, 0);
-            col = set_color_alpha(col, 0xC0);
-            draw_rectangle_outline(app, covered_rect, global_config.cursor_roundness, 2.0f,
-                                   col);
+
+//~ NOTE(rjf): Divider Comments
+
+static void
+F4_RenderDividerComments(Application_Links *app, Buffer_ID buffer, View_ID view,
+                         Text_Layout_ID text_layout_id)
+{
+    ProfileScope(app, "[Fleury] Divider Comments");
+    
+    String_Const_u8 divider_comment_signifier = string_u8_litexpr("//~");
+    
+    Token_Array token_array = get_token_array_from_buffer(app, buffer);
+    Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
+    Scratch_Block scratch(app);
+    
+    if(token_array.tokens != 0)
+    {
+        i64 first_index = token_index_from_pos(&token_array, visible_range.first);
+        Token_Iterator_Array it = token_iterator_index(0, &token_array, first_index);
+        
+        Token *token = 0;
+        for(;;)
+        {
+            token = token_it_read(&it);
+            
+            if(token->pos >= visible_range.one_past_last || !token || !token_it_inc_non_whitespace(&it))
+            {
+                break;
+            }
+            
+            if(token->kind == TokenBaseKind_Comment)
+            {
+                Rect_f32 comment_first_char_rect =
+                    text_layout_character_on_screen(app, text_layout_id, token->pos);
+                
+                Range_i64 token_range =
+                {
+                    token->pos,
+                    token->pos + (token->size > (i64)divider_comment_signifier.size
+                                  ? (i64)divider_comment_signifier.size
+                                  : token->size),
+                };
+                
+                u8 token_buffer[256] = {0};
+                buffer_read_range(app, buffer, token_range, token_buffer);
+                String_Const_u8 token_string = { token_buffer, (u64)(token_range.end - token_range.start) };
+                
+                if(string_match(token_string, divider_comment_signifier))
+                {
+                    // NOTE(rjf): Render divider line.
+                    Rect_f32 rect =
+                    {
+                        comment_first_char_rect.x0,
+                        comment_first_char_rect.y0-2,
+                        10000,
+                        comment_first_char_rect.y0,
+                    };
+                    f32 roundness = 4.f;
+                    draw_rectangle(app, rect, roundness, fcolor_resolve(fcolor_id(defcolor_comment)));
+                }
+                
+            }
+            
         }
+        
     }
 }
 
