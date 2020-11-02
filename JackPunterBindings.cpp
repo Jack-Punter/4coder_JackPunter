@@ -61,7 +61,7 @@ JackPunterGlobalBinding(Mapping *mapping, i64 global_id)
     Bind(project_fkey_command, KeyCode_F15);
     Bind(project_fkey_command, KeyCode_F16);
     BindMouseWheel(mouse_wheel_scroll);
-    BindMouseWheel(mouse_wheel_change_face_size, KeyCode_Control);
+    BindMouseWheel(jp_mouse_wheel_change_face_size, KeyCode_Control);
 }
 
 function void

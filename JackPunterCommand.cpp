@@ -263,4 +263,53 @@ CUSTOM_DOC("Remove the content in the rectangle bounded by the cursor and the ma
     }
 }
 
+//~ NOTE(jack): Font Size Changing stuff.
+
+CUSTOM_COMMAND_SIG(jp_increase_face_size)
+CUSTOM_DOC("Increase the size of the face used by the current buffer.")
+{
+    View_ID view = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
+    Face_ID face_id = get_face_id(app, buffer);
+    Face_Description description = get_face_description(app, face_id);
+    ++description.parameters.pt_size;
+    try_modify_face(app, face_id, &description);
+
+    Face_Description small_description = get_face_description(app, GlobalSmallCodeFaceID);
+    ++small_description.parameters.pt_size;
+    try_modify_face(app, GlobalSmallCodeFaceID, &small_description);
+}
+
+CUSTOM_COMMAND_SIG(jp_decrease_face_size)
+CUSTOM_DOC("Decrease the size of the face used by the current buffer.")
+{
+    View_ID view = get_active_view(app, Access_Always);
+    Buffer_ID buffer = view_get_buffer(app, view, Access_Always);
+    Face_ID face_id = get_face_id(app, buffer);
+    Face_Description description = get_face_description(app, face_id);
+    --description.parameters.pt_size;
+    try_modify_face(app, face_id, &description);
+
+    Face_Description small_description = get_face_description(app, GlobalSmallCodeFaceID);
+    --small_description.parameters.pt_size;
+    try_modify_face(app, GlobalSmallCodeFaceID, &small_description);
+}
+
+CUSTOM_COMMAND_SIG(jp_mouse_wheel_change_face_size)
+CUSTOM_DOC("Reads the state of the mouse wheel and uses it to either increase or decrease the face size.")
+{
+    local_persist u64 next_resize_time = 0;
+    u64 now = system_now_time();
+    if (now >= next_resize_time){
+        next_resize_time = now + 50*1000;
+        Mouse_State mouse = get_mouse_state(app);
+        if (mouse.wheel > 0){
+            jp_decrease_face_size(app);
+        }
+        else if (mouse.wheel < 0){
+            jp_increase_face_size(app);
+        }
+    }
+}
+
 #endif // FCODER_JACK_PUNTER_COMMANDS
