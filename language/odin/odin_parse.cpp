@@ -113,9 +113,14 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
             {
                 if (token->sub_kind == TokenOdinKind_ColonColon) {
                     if(!token_inc_non_whitespace(&it, &token)) {
-                        DEBUG_MSG_LIT("'::' was the last token\n");
+                        i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
+                        String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
+                        String_Const_u8 text = push_u8_stringf(scratch, "'::' was the last token on line [%s:%d]\n",
+                                                               file.str, line);
+                        DEBUG_MSG_STR(text);
                         break;
                     }
+                    
                     Range_i64 identifier_range = Ii64_size(prev_token->pos, prev_token->size);
                     String_Const_u8 identifier_name = push_buffer_range(app, scratch, buffer_id, identifier_range);
                     
@@ -127,7 +132,7 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                         /*if (!token_inc_to_kind_in_statement(&it, &token,
                                                             TokenBaseKind_ParentheticalOpen))*/
                         if (!token_inc_to_first_of_kinds(&it, &token, TokenBaseKind_ParentheticalOpen,
-                                                             TokenBaseKind_ScopeOpen))
+                                                         TokenBaseKind_ScopeOpen))
                         {
                             //NOTE(jack): proc had no brackets
                             i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
@@ -144,8 +149,18 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                         {
                             i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
                             String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
-                            String_Const_u8 text = push_u8_stringf(scratch, "Couldn't find close paren in statement line [%s:%d]\n",
-                                                                   file.str, line);
+                            String_Const_u8 text;
+                            switch(token->kind + 1) {
+                                case TokenBaseKind_ScopeClose: {
+                                    text = push_u8_stringf(scratch, "Couldn't find close scope in statement line [%s:%d]\n",
+                                                                           file.str, line);
+                                } break;
+                                case TokenBaseKind_ParentheticalClose: {
+                                    text = push_u8_stringf(scratch, "Couldn't find close paren in statement line [%s:%d]\n",
+                                                                           file.str, line);
+                                } break;
+                                default: text = {}; Assert(false); break;
+                            }
                             DEBUG_MSG_STR(text);
                             break;
                         }
@@ -172,8 +187,16 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                         } else if (!found_semi_colon && found_scope_open) {
                             ProcKind = Proc;
                         } else {
-                            DEBUG_MSG_LIT("Did not find closing SemiColon or ScopeOpen\n");
-                            break;
+                            /*
+                            i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
+                            String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
+                            String_Const_u8 text = push_u8_stringf(scratch, "Couldn't find close paren in statement line [%s:%d]\n",
+                                                                   file.str, line);
+                            DEBUG_MSG_STR(text);
+                            */
+                            // NOTE(jack): this a valid syntax for an externally defined function:
+                            // `type_is_boolean    :: proc($T: typeid) -> bool ---` <- note lack of semi-colon
+                            ProcKind = Proc;
                         }
 
                         if (ProcKind == Proc) {
