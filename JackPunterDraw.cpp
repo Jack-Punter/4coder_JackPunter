@@ -157,8 +157,16 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
 
         i64 cursor_pos = view_get_cursor_pos(app, vid);
         Token_Iterator_Array it = token_iterator_pos(0, &def_buffer_tokens, cursor_pos);
-
         List_String_Const_u8 function_parameter_list = {};
+        if (!(highlight_data.param_range == Range_i64{0, 0})) {
+            String_Const_u8 params = push_buffer_range(app, scratch, highlight_data.def_buffer,
+                                                      highlight_data.param_range);
+            i64 start = string_find_first(params, '(') + 1;
+            //i64 end = string_find_last(params, ')');
+            String_Const_u8 param_no_paren = string_substring(params, Ii64_size(start, params.size-1));
+            function_parameter_list = string_split(scratch, param_no_paren, (u8*)",", 1);
+        } else 
+        {
         it = token_iterator_pos(0, &def_buffer_tokens, highlight_data.name_range.start);
         // NOTE(jack): loop from the definition token forwards
         {
@@ -200,6 +208,7 @@ jp_draw_function_params(Application_Links *app, Text_Layout_ID text_layout_id,
                     transient_single_param_start = token->pos + 1;
                 }
             }
+        }
         }
 
         if (cursor_param_index <= function_parameter_list.node_count) {
