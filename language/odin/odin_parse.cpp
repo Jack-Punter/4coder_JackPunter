@@ -54,6 +54,16 @@ token_inc_non_whitespace(Token_Iterator_Array *it, Token **token)
 }
 
 function b32
+token_dec_non_whitespace(Token_Iterator_Array *it, Token **token)
+{
+    if (!token_it_dec_non_whitespace(it)) {
+        return false;
+    }
+    *token = token_it_read(it);
+    return true;
+}
+
+function b32
 token_inc_to_kind(Token_Iterator_Array *it, Token **token, Token_Base_Kind kind)
 {
     do {
@@ -128,94 +138,75 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                         token->sub_kind == TokenOdinKind_no_inline)
                     {
                         Range_i64 param_range = { 0 };
-
-                        /*if (!token_inc_to_kind_in_statement(&it, &token,
-                                                            TokenBaseKind_ParentheticalOpen))*/
                         if (!token_inc_to_first_of_kinds(&it, &token, TokenBaseKind_ParentheticalOpen,
                                                          TokenBaseKind_ScopeOpen))
                         {
-                            //NOTE(jack): proc had no brackets
                             i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
                             String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
-                            String_Const_u8 text = push_u8_stringf(scratch, "Couldn't find open paren in statement line [%s:%d]\n",
-                                                                   file.str, line);
+                            String_Const_u8 text = push_u8_stringf(scratch, "'::' was the last token on line [%s:%d]\n",
+                                                                file.str, line);
                             DEBUG_MSG_STR(text);
                             break;
                         }
-                        param_range.start = token->pos;
-                        // NOTE(jack) ScopeOpen and ParentheticalOpen are preceded by their close counterpart
-                        // and if we get here the token is guarateed to be one of ScopeOpen, ParentheticalOpen
-                        if (!token_inc_to_kind(&it, &token, token->kind + 1))
-                        {
-                            i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
-                            String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
-                            String_Const_u8 text;
-                            switch(token->kind + 1) {
-                                case TokenBaseKind_ScopeClose: {
-                                    text = push_u8_stringf(scratch, "Couldn't find close scope in statement line [%s:%d]\n",
-                                                                           file.str, line);
-                                } break;
-                                case TokenBaseKind_ParentheticalClose: {
-                                    text = push_u8_stringf(scratch, "Couldn't find close paren in statement line [%s:%d]\n",
-                                                                           file.str, line);
-                                } break;
-                                default: text = {}; Assert(false); break;
+
+                        // NOTE(jack): It is not an overload set.
+                        if (token->kind == TokenBaseKind_ParentheticalOpen) {
+                            //param_range.start = token->pos;
+                            if(find_surrounding_nest(app, buffer_id, token->pos + token->size,
+                                                     FindNest_Paren, &param_range))
+                            {
+                                // NOTE(jack): We dont want to include the ')' in the range
+                                --param_range.end;
+                                
+                                enum { None = 0, Proc, ProcType } ProcKind = {};
+                                i64 line_end_pos = get_line_end_pos_from_pos(app, buffer_id, param_range.end);
+                                Token_Iterator_Array tmp_it = token_iterator_pos(0, &token_array, line_end_pos);
+                                Token *tmp_Token = token_it_read(&tmp_it);
+                                if (tmp_Token->kind == TokenBaseKind_Whitespace) {
+                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &Token));
+                                }
+                                if (tmp_Token->sub_kind == TokenOdinKind_Semicolon) {
+                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &Token));
+                                }
+                                if (tmp_Token->kind == TokenBaseKind_ScopeOpen || 
+                                    tmp_Token->kind == TokenBaseKind_ScopeClose || //one-liner functions
+                                    tmp_Token->sub_kind == TokenOdinKind_Minus)
+                                {
+                                    ProcKind = Proc;
+                                } else {
+                                    if(!token_it_inc_non_whitespace(&tmp_it)) {
+                                        ProcKind = ProcType;
+                                    } else {
+                                        tmp_Token = token_it_read(&tmp_it);
+                                        if(tmp_Token->kind == TokenBaseKind_ScopeOpen) {
+                                            ProcKind = Proc;
+                                        } else {
+                                            ProcKind = ProcType;
+                                        }
+                                    }
+                                }
+
+                                if (ProcKind == Proc) {
+                                    Highlight_String_Data highlight_data = { 0 };
+                                    highlight_data.string = identifier_name;
+                                    highlight_data.data.type = HighlightType_Function;
+                                    highlight_data.data.def_buffer = buffer_id;
+                                    highlight_data.data.name_range = identifier_range;
+                                    highlight_data.data.param_range = param_range;
+                                    highlight_string_list_push(scratch, list, highlight_data);
+                                } else if (ProcKind == ProcType) {
+                                    // TODO(jack): Do we want to add a flag and the parameter info to this highlight data,
+                                    // so that, we can mark any indentifier defined as this type can be marked as a function?
+                                    highlight_string_list_push(scratch, list, identifier_name, 
+                                                            HighlightType_Type, buffer_id, identifier_range);
+                                }
+                                it = token_iterator_pos(0, &token_array, line_end_pos);
+                            } else { 
+                                // NOTE(jack): Overload set
+                                highlight_string_list_push(scratch, list, identifier_name,
+                                                           HighlightType_Type, buffer_id, identifier_range);
                             }
-                            DEBUG_MSG_STR(text);
-                            break;
                         }
-                        Token *next_semi_colon;
-                        Token_Iterator_Array temp_it = it;
-                        b32 found_semi_colon = token_inc_to_sub_kind(&temp_it, &next_semi_colon,
-                                                                    TokenOdinKind_Semicolon);
-                        Token *next_scope_open;
-                        temp_it = it;
-                        b32 found_scope_open = token_inc_to_kind(&temp_it, &next_scope_open,
-                                                                 TokenBaseKind_ScopeOpen);
-
-                        enum { Proc, ProcType } ProcKind = {};
-
-                        // NOTE(jack): Determine if this is a function type or function;
-                        if (found_semi_colon && found_scope_open) {
-                            if (next_semi_colon->pos < next_scope_open->pos) {
-                                ProcKind = ProcType;
-                            } else {
-                                ProcKind = Proc;
-                            }
-                        } else if (found_semi_colon && !found_scope_open) {
-                            ProcKind = ProcType;
-                        } else if (!found_semi_colon && found_scope_open) {
-                            ProcKind = Proc;
-                        } else {
-                            /*
-                            i64 line = get_line_number_from_pos(app, buffer_id, prev_token->pos);
-                            String_Const_u8 file = push_buffer_file_name(app, scratch, buffer_id);
-                            String_Const_u8 text = push_u8_stringf(scratch, "Couldn't find close paren in statement line [%s:%d]\n",
-                                                                   file.str, line);
-                            DEBUG_MSG_STR(text);
-                            */
-                            // NOTE(jack): this a valid syntax for an externally defined function:
-                            // `type_is_boolean    :: proc($T: typeid) -> bool ---` <- note lack of semi-colon
-                            ProcKind = Proc;
-                        }
-
-                        if (ProcKind == Proc) {
-                            param_range.end = token->pos;
-                            Highlight_String_Data highlight_data = { 0 };
-                            highlight_data.string = identifier_name;
-                            highlight_data.data.type = HighlightType_Function;
-                            highlight_data.data.def_buffer = buffer_id;
-                            highlight_data.data.name_range = identifier_range;
-                            //NOTE(jack) We aren't going to add a parameters list to overload sets
-                            if (token->kind == TokenBaseKind_ParentheticalClose) {
-                                highlight_data.data.param_range = param_range;
-                            }
-                            highlight_string_list_push(scratch, list, highlight_data);
-                        } else if (ProcKind == ProcType) {
-                            highlight_string_list_push(scratch, list, identifier_name, HighlightType_Type,
-                                                       buffer_id, identifier_range);
-                        }
-
                     } else if (token->sub_kind == TokenOdinKind_enum || token->sub_kind == TokenOdinKind_struct ||
                                token->sub_kind == TokenOdinKind_union || token->sub_kind == TokenOdinKind_distinct ||
                                token->sub_kind == TokenOdinKind_type || odin_is_builtin_type(token))
