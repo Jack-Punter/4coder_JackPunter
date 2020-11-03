@@ -314,7 +314,7 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
                         close_count++;
                     } else if (peek_target->kind == TokenBaseKind_ParentheticalOpen) {
                         open_count++;
-                    } else if (peek_target->sub_kind == TokenCppKind_Comma) {
+                    } else if (peek_target->kind == TokenBaseKind_StatementClose) {
                         cursor_parameter_index++;
                     }
                 }
