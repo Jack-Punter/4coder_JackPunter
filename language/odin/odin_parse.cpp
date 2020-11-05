@@ -163,10 +163,10 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                                 Token_Iterator_Array tmp_it = token_iterator_pos(0, &token_array, line_end_pos);
                                 Token *tmp_Token = token_it_read(&tmp_it);
                                 if (tmp_Token->kind == TokenBaseKind_Whitespace) {
-                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &Token));
+                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &tmp_Token));
                                 }
                                 if (tmp_Token->sub_kind == TokenOdinKind_Semicolon) {
-                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &Token));
+                                    AssertAlways(token_dec_non_whitespace(&tmp_it, &tmp_Token));
                                 }
                                 if (tmp_Token->kind == TokenBaseKind_ScopeOpen || 
                                     tmp_Token->kind == TokenBaseKind_ScopeClose || //one-liner functions
@@ -201,11 +201,11 @@ jp_parse_odin_content(Application_Links *app, Arena *scratch,
                                                             HighlightType_Type, buffer_id, identifier_range);
                                 }
                                 it = token_iterator_pos(0, &token_array, line_end_pos);
-                            } else { 
-                                // NOTE(jack): Overload set
-                                highlight_string_list_push(scratch, list, identifier_name,
-                                                           HighlightType_Type, buffer_id, identifier_range);
                             }
+                        } else { 
+                            // NOTE(jack): Overload set
+                            highlight_string_list_push(scratch, list, identifier_name,
+                                                        HighlightType_Function, buffer_id, identifier_range);
                         }
                     } else if (token->sub_kind == TokenOdinKind_enum || token->sub_kind == TokenOdinKind_struct ||
                                token->sub_kind == TokenOdinKind_union || token->sub_kind == TokenOdinKind_distinct ||

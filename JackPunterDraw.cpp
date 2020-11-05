@@ -383,6 +383,7 @@ function void
 fill_nest_helper_list(Application_Links *app, Arena * arena, Scope_Helper_List *helper_list,
                       Buffer_ID buffer, i64 cursor_pos, Rect_f32 buffer_region)
 {
+    // TODO(jack): Use find_surrounding_nest to allow multi line helpers?
     Range_i64_Array enclosures = get_enclosure_ranges(app, arena, buffer, cursor_pos,
                                                       RangeHighlightKind_CharacterHighlight);
                                                       //FindNest_Paren);
@@ -392,7 +393,18 @@ fill_nest_helper_list(Application_Links *app, Arena * arena, Scope_Helper_List *
         Range_i64 line_range = get_line_range_from_pos_range(app, buffer,
                                                              enclosures.ranges[i]);
         Range_i64 scope_header_range = get_line_pos_range(app, buffer, line_range.start);
-        if(range_size(scope_header_range) == 1) {
+        
+        u8 header_buffer[256] = { 0 };
+        buffer_read_range(app, buffer, scope_header_range, header_buffer);
+        String_Const_u8 header_string = {header_buffer, (u64)(scope_header_range.end - scope_header_range.start)};
+        int non_whitespace_count = 0;
+        for(u32 idx = 0; idx < header_string.size; ++idx){
+            if(!character_is_whitespace(header_string.str[idx])) {
+                ++non_whitespace_count;
+            }
+        }
+        //if(range_size(scope_header_range) == 1) {
+        if (non_whitespace_count == 1) {
             // NOTE(jack): go to the previous line if scope open is on its own line
             scope_header_range = get_line_pos_range(app, buffer, line_range.start - 1);
         }
