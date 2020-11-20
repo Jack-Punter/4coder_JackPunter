@@ -465,7 +465,8 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
         for (Scope_Helper_Node *node = scope_helpers.first;
              node != 0; node = node->next, ++node_index)
         {
-            if (!(node->scope_header_range.start == 0 && node->scope_header_range.start == 0))
+            if (!(node->scope_header_range.start == 0 && node->scope_header_range.start == 0) &&
+                 (node->scope_line_range.start != node->scope_line_range.end))
             {   
                 node->scope_header_range = range_remove_whitespace_ends(&token_array, node->scope_header_range);
                 Face_Metrics small_metrics = get_face_metrics(app, GlobalSmallCodeFaceID);
