@@ -359,6 +359,7 @@ struct Scope_Helper_Node {
     
     Range_i64 scope_header_range;
     Range_i64 scope_line_range;
+    Range_i64 enclosure;
 };
 
 struct Scope_Helper_List {
@@ -368,11 +369,13 @@ struct Scope_Helper_List {
 };
 
 function void
-scope_helper_list_push(Arena *arena, Scope_Helper_List *list, Range_i64 line_range, Range_i64 header_range)
+scope_helper_list_push(Arena *arena, Scope_Helper_List *list, Range_i64 line_range, Range_i64 header_range,
+                       Range_i64 enclosure)
 {
-    Scope_Helper_Node *node = push_array(arena, Scope_Helper_Node, 1);
+    Scope_Helper_Node *node  = push_array(arena, Scope_Helper_Node, 1);
     node->scope_header_range = header_range;
-    node->scope_line_range = line_range;
+    node->scope_line_range   = line_range;
+    node->enclosure          = enclosure;
     sll_queue_push(list->first, list->last, node);
     ++list->node_count;
 }
@@ -411,7 +414,7 @@ fill_nest_helper_list(Application_Links *app, Arena * arena, Scope_Helper_List *
         // NOTE(jack): We will add all helpers, and let the drawing code decide if it should draw or not.
         // This way we dont have to worry about pushing blank helpers to keep indentation correct on
         // vertical helpers
-        scope_helper_list_push(arena, helper_list, line_range, scope_header_range);
+        scope_helper_list_push(arena, helper_list, line_range, scope_header_range, enclosures.ranges[i]);
     }
 }
 
@@ -465,6 +468,12 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
         for (Scope_Helper_Node *node = scope_helpers.first;
              node != 0; node = node->next, ++node_index)
         {
+            i64 range_start_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.start);
+            i64 range_end_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.end);
+            
+            Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
+            b32 range_start_line_visible = range_contains(visible_range, range_start_line_pos);
+            b32 range_end_line_visible = range_contains(visible_range, range_end_line_pos);
             if (!(node->scope_header_range.start == 0 && node->scope_header_range.start == 0) &&
                  (node->scope_line_range.start != node->scope_line_range.end))
             {   
@@ -479,12 +488,6 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                 y_range.start = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.start).end;
                 y_range.end = text_layout_line_on_screen(app, text_layout_id, node->scope_line_range.end).start;
 
-                i64 range_start_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.start);
-                i64 range_end_line_pos = get_line_start_pos(app, buffer, node->scope_line_range.end);
-                
-                Range_i64 visible_range = text_layout_get_visible_range(app, text_layout_id);
-                b32 range_start_line_visible = range_contains(visible_range, range_start_line_pos);
-                b32 range_end_line_visible = range_contains(visible_range, range_end_line_pos);
 
                 //NOte
                 b32 UseVerticalScopeHelpers = !(range_start_line_visible || range_end_line_visible);
@@ -558,6 +561,19 @@ jp_draw_scope_helpers(Application_Links *app, Text_Layout_ID text_layout_id,
                 draw_rectangle(app, scope_line, 0, scope_line_color);
                 
             }
+            
+            ARGB_Color comment_color = finalize_color(defcolor_comment, 0);
+            if (range_start_line_visible) {
+                Rect_f32 open_pos = text_layout_character_on_screen(app, text_layout_id, node->enclosure.start);
+                draw_string(app, face_id, string_u8_litexpr("{"), open_pos.p0, comment_color);
+            }
+            
+            if (range_end_line_visible) {
+                Rect_f32 end_pos = text_layout_character_on_screen(app, text_layout_id, node->enclosure.end);
+                end_pos.x0 -= metrics.normal_advance;
+                draw_string(app, face_id, string_u8_litexpr("}"), end_pos.p0, comment_color);
+            }
+
         }
     }
 }

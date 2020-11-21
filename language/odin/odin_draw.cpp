@@ -10,14 +10,15 @@ static ARGB_Color jp_get_token_color_odin(Application_Links *app, Token token, S
         } break;
 
         case TokenBaseKind_Keyword: {
-            if (odin_is_directive(&token) || odin_is_attribute(&token))
+            if (odin_is_directive(&token) || odin_is_attribute(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_preproc));
-            else if (odin_is_builtin_type(&token))
+            } else if (odin_is_builtin_type(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_type));
-            else if (odin_is_builtin_proc(&token))
+            } else if (odin_is_builtin_proc(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_function));
-            else
+            } else {
                 color = fcolor_resolve(fcolor_id(defcolor_keyword));
+            }
         } break;
 
         case TokenBaseKind_Comment: {
@@ -44,6 +45,10 @@ static ARGB_Color jp_get_token_color_odin(Application_Links *app, Token token, S
             } else {
                 color = jp_get_token_color_from_identifier_info(app, lexeme);
             }
+        } break;
+
+         case TokenBaseKind_Operator: {
+            color = fcolor_resolve(fcolor_id(defcolor_preproc));
         } break;
     }
     return(color);

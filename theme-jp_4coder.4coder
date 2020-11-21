@@ -12,8 +12,9 @@ defcolor_highlight = 0xFFDDEE00;
 defcolor_mark = 0xFF494949;
 defcolor_text_default = 0xFF90B080;
 defcolor_at_highlight = 0xFFFF44DD;
-defcolor_comment = 0xFF2090F0;
-defcolor_comment_pop = {0xFF00A000, 0xFFA00000, 0xFFA0A000};
+
+defcolor_comment = 0xFF20F0F0;
+defcolor_comment_pop = {0xFF00C000, 0xFFC00000, 0xFFC0C000};
 defcolor_keyword = 0xFFD08F20;
 defcolor_str_constant = 0xFF50FF30;
 defcolor_char_constant = defcolor_str_constant;

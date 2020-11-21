@@ -31,6 +31,9 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
         case TokenBaseKind_Identifier: {
             color = jp_get_token_color_from_identifier_info(app, lexeme);
         } break;
+        case TokenBaseKind_Operator: {
+            color = fcolor_resolve(fcolor_id(defcolor_preproc));
+        } break;
     }
     // specifics override generals
     switch (token.sub_kind){
