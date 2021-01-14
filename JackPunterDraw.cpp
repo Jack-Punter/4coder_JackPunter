@@ -635,8 +635,11 @@ F4_RenderDividerComments(Application_Links *app, Buffer_ID buffer, View_ID view,
                         10000,
                         comment_first_char_rect.y0,
                     };
+                    Rect_f32 region = view_get_buffer_region(app, view);
+                    Rect_f32 prev_region = draw_set_clip(app, region);
                     f32 roundness = 4.f;
                     draw_rectangle(app, rect, roundness, fcolor_resolve(fcolor_id(defcolor_comment)));
+                    draw_set_clip(app, prev_region);
                 }
                 
             }

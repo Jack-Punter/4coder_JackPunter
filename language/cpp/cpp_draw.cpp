@@ -12,6 +12,8 @@ jp_get_token_color_cpp(Application_Links *app, Token token, String_Const_u8 lexe
         case TokenBaseKind_Keyword: {
             if (jp_is_type_token(&token)) {
                 color = fcolor_resolve(fcolor_id(defcolor_type));
+            } else if (token.sub_kind == TokenCppKind_Operator) {
+                color = fcolor_resolve(fcolor_id(defcolor_function));
             } else {
                 color = fcolor_resolve(fcolor_id(defcolor_keyword));
             }
