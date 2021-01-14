@@ -72,7 +72,8 @@ finalize_highlight_string_list(Application_Links *app, Arena *arena,
     return Result;
 }
 
-// NOTE(jack): Identifier lookup that will include stuff from this file
+// NOTE(jack): Identifier lookup that will include tokens defined
+//             in file that is being parsed. 
 // (for use mid parse)
 function b32
 jp_get_existing_identifier_data(Application_Links *app, String_Const_u8 name,

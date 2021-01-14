@@ -72,6 +72,15 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     }
                     Token *second_token = token_it_read(&it);
                     
+                    // NOTE(jack): typedef volatile i32 register32;
+                    if (second_token->sub_kind == TokenCppKind_Volatile) {
+                        if (!token_it_inc_non_whitespace(&it)) {
+                            DEBUG_MSG_LIT("typedef was the last token\n");
+                            break;
+                        }
+                        second_token = token_it_read(&it);
+                    }
+
                     // NOTE(jack): typedef enum { TILE_NONE, TILE_WALL, ... }
                     if (second_token->sub_kind == TokenCppKind_Enum) {
                         if (!jp_iterate_end_of_next_scope(app, &it)) {
@@ -116,8 +125,9 @@ jp_parse_cpp_keywords_types(Application_Links *app, Arena *scratch,
                     String_Const_u8 di_string = push_token_lexeme(app, scratch, buffer_id, di_token);
                     highlight_string_list_push(scratch, list, di_string, HighlightType_Type,
                                                buffer_id, Ii64_size(di_token->pos, di_token->size));
-                } else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
-                           token->sub_kind == TokenCppKind_Class || token->sub_kind == TokenCppKind_Enum)
+                }
+                else if (token->sub_kind == TokenCppKind_Struct || token->sub_kind == TokenCppKind_Union ||
+                         token->sub_kind == TokenCppKind_Class || token->sub_kind == TokenCppKind_Enum)
                 {
                     // NOTE(jack): struct MyStruct {int x, int y};
                     //             union MyUnion { struct {int x, int y}; int a[2]; };
