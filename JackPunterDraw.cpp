@@ -346,8 +346,8 @@ jp_draw_definition_helpers(Application_Links *app, Text_Layout_ID text_layout_id
                                             lookup_data, cursor_parameter_index);
                 } break;
                 case HighlightType_Macro: {
-                    jp_draw_macro_definition(app, text_layout_id, face_id, vid, buffer,
-                                             lookup_data, popup_anchor_rect);
+                    //jp_draw_macro_definition(app, text_layout_id, face_id, vid, buffer,
+                    //                         lookup_data, popup_anchor_rect);
                 } break;
             }
         }

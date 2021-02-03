@@ -326,4 +326,13 @@ CUSTOM_DOC("If the current file is a *.cpp or *.h, attempts to open the correspo
     }
 }
 
+//~ NOTE(jack): Customization development debug/testing
+CUSTOM_UI_COMMAND_SIG(jp_print_hot_dir)
+CUSTOM_DOC("DevTesting")
+{
+    Scratch_Block scratch(app);
+    String_Const_u8 dir = push_hot_directory(app, scratch);
+    print_message(app, dir);
+}
+
 #endif // FCODER_JACK_PUNTER_COMMANDS
