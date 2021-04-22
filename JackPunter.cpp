@@ -1,6 +1,9 @@
 #if !defined(FCODER_JACK_PUNTER)
 #define FCODER_JACK_PUNTER
 
+
+
+TEST
 #include "../4coder_default_include.cpp"
 
 #define DEBUGGING 1
@@ -49,7 +52,7 @@ struct Highlight_Data {
     HighlightType type;
     Buffer_ID def_buffer;
     Range_i64 name_range;
-
+    
     union {
         struct /* HighlightType_Function Data */ {
             Range_i64 param_range;
@@ -79,9 +82,9 @@ struct jp_buffer_data_t {
     // cleared on reparse (as well as erased from app table)
     Arena custom_highlights_arena;
     String_Const_u8_Array custom_highlight_array;
-
+    
     b32 parse_contents = false;
-
+    
     Language *language;
 };
 
@@ -119,11 +122,11 @@ jp_get_language_from_extension(Application_Links *app, String_Const_u8 ext)
             break;
         }
     }
-
+    
     if (!found) {
         Result = app_data->default_code_language;
     }
-
+    
     return Result;
 }
 
@@ -160,7 +163,7 @@ jp_custom_highlight_lookup(Application_Links *app, String_Const_u8 string, Highl
     Data table_entry = {0};
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
-
+    
     Data key_data = {0};
     key_data.data = string.str;
     key_data.size = string.size;
@@ -234,75 +237,75 @@ custom_layer_init(Application_Links *app)
     // has mapping=""; rather than mapping="choose";
     // 4.1.6 chaned the default setting to ""
     JackPunterBindings(&framework_mapping);
-
+    
     Managed_Scope global_scope = get_global_managed_scope(app);
     jp_app_data_t* app_data = scope_attachment(app, global_scope, jp_app_attachment, jp_app_data_t);
     app_data->table_allocator = get_base_allocator_system();
     app_data->global_highlights_arena = make_arena_system();
     app_data->custom_highlight_table = make_table_Data_Data(app_data->table_allocator,
-                                                           custom_highlight_base_size);
-
+                                                            custom_highlight_base_size);
+    
     Highlight_Data not_defined_type = {HighlightType_Type, 0, 0};
     Data nd_type_data = push_data_copy(&app_data->global_highlights_arena,
                                        make_data_struct(&not_defined_type));
-
+    
     Highlight_Data not_defined_keyword = {HighlightType_Keyword, 0, 0};
     Data nd_keyword_data = push_data_copy(&app_data->global_highlights_arena,
                                           make_data_struct(&not_defined_keyword));
     // CUSTOM TYPE HIGHLIGHTS
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint8_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint8_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint16_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint16_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint32_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint32_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint64_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("uint64_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int8_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("int8_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int16_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("int16_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int32_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("int32_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("int64_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("int64_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("size_t")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("size_t")),
+                               nd_type_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("auto")),
-        nd_type_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("auto")),
+                               nd_type_data
+                               );
     
-
+    
     // CUSTOM KEYWORD HIGHLIGHTS
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("override")),
-        nd_keyword_data
-    );
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("override")),
+                               nd_keyword_data
+                               );
     jp_insert_custom_highlight(
-        app, push_string_copy(&app_data->global_highlights_arena, SCu8("final")),
-        nd_keyword_data
-    );
-
-
+                               app, push_string_copy(&app_data->global_highlights_arena, SCu8("final")),
+                               nd_keyword_data
+                               );
+    
+    
     // Language definitions
     Language *cpp_language = push_array(&app_data->global_highlights_arena, Language, 1);
     cpp_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("Cpp"));
@@ -314,7 +317,7 @@ custom_layer_init(Application_Links *app)
     cpp_language->lex_full_input = lex_full_input_cpp;
     cpp_language->get_token_color = jp_get_token_color_cpp;
     cpp_language->parse_content = jp_parse_cpp_content;
-
+    
     Language *odin_language = push_array(&app_data->global_highlights_arena, Language, 1);
     odin_language->name = push_string_copy(&app_data->global_highlights_arena, SCu8("Odin"));
     odin_language->ext_string = push_string_copy(&app_data->global_highlights_arena, SCu8(".odin"));
@@ -323,7 +326,7 @@ custom_layer_init(Application_Links *app)
     odin_language->lex_full_input = lex_full_input_odin;
     odin_language->get_token_color = jp_get_token_color_odin;
     odin_language->parse_content = jp_parse_odin_content;
-
+    
     // NOTE(jack): Datadesk support via the odin lexer/parsing routines as they are have
     // very similar syntax
     Language *datadesk_language = push_array(&app_data->global_highlights_arena, Language, 1);
@@ -334,7 +337,7 @@ custom_layer_init(Application_Links *app)
     datadesk_language->lex_full_input = lex_full_input_odin;
     datadesk_language->get_token_color = jp_get_token_color_odin;
     datadesk_language->parse_content = jp_parse_odin_content;
-
+    
     Language_List *lang_list = &app_data->languages;
     sll_queue_push(lang_list->first, lang_list->last, cpp_language);
     sll_queue_push(lang_list->first, lang_list->last, odin_language);
@@ -342,13 +345,13 @@ custom_layer_init(Application_Links *app)
     // Set a default fallback language in case there is not a language defined
     // for a given file extension
     app_data->default_code_language = cpp_language;
-
-
+    
+    
     Face_Description desc = get_global_face_description(app);
     --desc.parameters.pt_size;
     desc.parameters.bold = 1;
     desc.parameters.italic = 1;
-
+    
     GlobalSmallCodeFaceID = try_create_new_face(app, &desc);
 }
 
