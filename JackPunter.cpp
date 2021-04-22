@@ -3,7 +3,6 @@
 
 
 
-TEST
 #include "../4coder_default_include.cpp"
 
 #define DEBUGGING 1
@@ -356,5 +355,4 @@ custom_layer_init(Application_Links *app)
 }
 
 #endif // FCODER_JACK_PUNTER
-
 // BOTTOM
